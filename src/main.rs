@@ -89,7 +89,11 @@ async fn main() {
         Some("daemon") => {
             let store_path = std::env::var("STORE_PATH").expect("STORE_PATH");
             let store = Store::new(PathBuf::from(store_path)).unwrap();
-            let reactor = Reactor::new(store.handle());
+            let mut reactor = Reactor::new(store.handle());
+            let kraken = KrakenExchange::from_env()
+                .expect("Kraken credentials")
+                .boxed();
+            reactor.register_exchange(kraken).await;
             api::spawn(reactor)
                 .await
                 .expect("Failed to launch api server");

@@ -1,11 +1,12 @@
 use super::*;
-use crate::prelude::*;
-use kraken_sdk_rest::{api::AddOrderRequest, Client, Interval, PairName};
+use crate::{reactor::SyncExchange};
+use kraken_sdk_rest::{Client, Interval, PairName};
 
 pub struct KrakenExchange {
     pub api_key: String,
     pub api_private_key: String,
     pub client: Client,
+    pub markets_cache: Arc<Mutex<Option<HashMap<MarketIdentifier, MarketDefinition>>>>,
 }
 
 impl KrakenExchange {
@@ -14,7 +15,20 @@ impl KrakenExchange {
             client: Client::new(&api_key, &api_private_key),
             api_key,
             api_private_key,
+            markets_cache: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn from_env() -> Result<KrakenExchange> {
+        let api_private_key = std::env::var("KRAKEN_API_PRIVATE_KEY")
+            .map_err(|_| Error::MissingEnviron("KRAKEN_API_PRIVATE_KEY"))?;
+        let api_key =
+            std::env::var("KRAKEN_API_KEY").map_err(|_| Error::MissingEnviron("KRAKEN_API_KEY"))?;
+        Ok(Self::new(api_key, api_private_key))
+    }
+
+    pub fn boxed(self) -> SyncExchange {
+        Arc::new(Mutex::new(Box::new(self)))
     }
 }
 
@@ -29,9 +43,10 @@ impl Exchange for KrakenExchange {
         Ok(NaiveDateTime::from_timestamp(server_time.unixtime, 0))
     }
     async fn get_ohlc(&self, id: &MarketIdentifier, since: u64) -> Result<OHLCChunk> {
+        let market = self.markets_cache.lock().await.as_ref().and_then(|e| e.get(id)).ok_or(Error::PairNotLoaded)?.pairname.clone();
         Ok(OHLCChunk::new(
             self.client
-                .get_ohlc_data(PairName::from(&id.base, &id.quote))
+                .get_ohlc_data(market)
                 .interval(Interval::Min1)
                 .since(since)
                 .send()
@@ -43,14 +58,36 @@ impl Exchange for KrakenExchange {
     }
 
     async fn get_markets(&self) -> Result<Vec<MarketIdentifier>> {
-        let pairs = self.client.get_asset_pairs().send().await?;
-        Ok(pairs
-            .into_iter()
-            .map(|(k, v)| MarketIdentifier {
-                quote: v.quote,
-                base: v.base,
-                exchange_name: self.name(),
-            })
-            .collect())
+        let mut lock = self.markets_cache.lock().await;
+        if let Some(markets) = lock.clone() {
+            Ok(markets.keys().cloned().collect())
+        } else {
+            let pairs = self.client.get_asset_pairs().send().await?;
+            let mut map = HashMap::new();
+            for (_, pair) in pairs {
+                let id = MarketIdentifier {
+                    exchange_name: self.name(),
+                    base: pair.base,
+                    quote: pair.quote,
+                };
+                let def = MarketDefinition {
+                    pairname: pair.altname,
+                    pair_decimals: pair.pair_decimals,
+                    lot_decimals: pair.lot_decimals,
+                    lot_multiplier: pair.lot_multiplier,
+                    leverage_buy: pair.leverage_buy,
+                    leverage_sell: pair.leverage_sell,
+                    fees: pair.fees.into_iter().map(|e| (e.0, e.1)).collect(),
+                    fees_maker: pair.fees_maker.map(|e| e.into_iter().map(|e| (e.0, e.1)).collect()),
+                    margin_call: pair.margin_call,
+                    margin_stop: pair.margin_stop,
+                    ordermin: pair.ordermin,
+                };
+                map.insert(id, def);
+            }
+            let keys = map.keys().cloned().collect();
+            lock.replace(map.clone());
+            Ok(keys)
+        }
     }
 }

@@ -20,4 +20,33 @@ pub enum Error {
     PeakFinder(&'static str),
     #[error("api error: {0}")]
     ApiServer(#[from] rocket::Error),
+    #[error("Missing environ: {0}")]
+    MissingEnviron(&'static str),
+    #[error("Exchange not found: {0}")]
+    ExchangeNotFound(String),
+    #[error("Market not found: EXCHANGE={0} MARKET={1}")]
+    MarketNotFound(String, String),
+    #[error("No data")]
+    NoData,
+    #[error("Pairs are not loaded")]
+    PairNotLoaded,
+}
+
+impl<'r> rocket::response::Responder<'r, 'static> for crate::error::Error {
+    fn respond_to(self, r: &'r rocket::Request<'_>) -> rocket::response::Result<'static> {
+        log::error!(
+            "An error occured {} {:?} {:?} {:?}",
+            self,
+            r.method(),
+            r.uri().path(),
+            r.uri().query(),
+        );
+        rocket::response::Result::Ok(
+            rocket::response::status::Custom(
+                rocket::http::Status::InternalServerError,
+                rocket::serde::json::Json(format!("{}", self)),
+            )
+            .respond_to(r)?,
+        )
+    }
 }

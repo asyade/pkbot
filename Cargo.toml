@@ -1,0 +1,26 @@
+[package]
+name = "pkbot"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = "0.22.1"
+tui = { version = "0.16.0", features = [ "crossterm" ] }
+tokio = { version = "1.13.0", features = [ "full" ] }
+futures = "0.3.17"
+kraken_sdk_rest = {git = "https://github.com/asyade/rust_kraken_sdk", rev="8b474014768da95a6b733b81b7d22fc02e8d2f4d"}
+async-trait = "0.1.51"
+chrono = "0.4.19"
+thiserror = "1.0.30"
+sled = "0.34.7"
+bincode = { version = "2.0.0-alpha.1", features = [ "std", "derive", "atomic" ] }
+log = "0.4"
+pretty_env_logger = "0.4"
+itertools = "0.10.1"
+clap = "3.0.0-beta.5"
+rocket = { version = "0.5.0-rc.1", features = ["tls", "secrets", "json"] }
+serde = { version = "=1.0.117" }
+serde_derive = "1.0.91"
+serde_json = "1.0.39"

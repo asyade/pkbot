@@ -4,6 +4,9 @@ use std::time::SystemTime;
 
 pub mod utils;
 
+mod sync;
+pub use sync::*;
+
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct HistoryIdentifier {
     pub market_name: String,
@@ -61,47 +64,37 @@ impl MarketHistory {
 pub struct Reactor {
     pub store: StoreHandle,
     pub exchanges: Arc<Mutex<HashMap<String, SyncExchange>>>,
+    pub markets: Arc<Mutex<HashMap<MarketIdentifier, SyncMarket>>>,
 }
-
-pub type SyncExchange = Arc<Mutex<Box<dyn Exchange + Sync + Send>>>;
 
 impl Reactor {
     pub fn new(store: StoreHandle) -> Self {
         Self {
             store,
             exchanges: Arc::new(Mutex::new(HashMap::new())),
+            markets: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub async fn register_exchange(&mut self, exchange: SyncExchange) {
+    pub async fn register_exchange(&self, exchange: SyncExchange) {
         let name = exchange.lock().await.name();
         self.exchanges.lock().await.insert(name, exchange);
     }
 
-    pub async fn set_refresh_ohlc(
-        &mut self,
-        market: MarketIdentifier,
-        interval: Duration,
-        exchange: SyncExchange,
-    ) -> Result<tokio::task::JoinHandle<()>> {
-        let exchange_name = exchange.lock().await.name();
-        log::info!(
-            "Registering market refresh: EXCHANGE={}, INTERVAL={:#?}",
-            &exchange_name,
-            interval
-        );
-        let store = self.store.market(market)?;
-        Ok(tokio::spawn(Self::refresh_routine(
-            interval, exchange, store,
-        )))
-    }
-
-    async fn refresh_routine(interval: Duration, exchange: SyncExchange, store: StoreMarketHandle) {
-        loop {
-            if let Err(e) = store.refresh(exchange.clone()).await {
-                log::error!("Failed to refresh market: {}", e);
+    pub async fn get_or_register_market(&self, id: MarketIdentifier) -> Result<SyncMarket> {
+        let (market, fresh) = {
+            let mut lock = self.markets.lock().await; 
+            if let Some(market) = lock.get(&id) {
+                (market.clone(), false)
+            } else {
+                let market = SyncMarket::new(&self, id.clone()).await?;
+                lock.insert(id, market.clone());
+                (market, true)
             }
-            tokio::time::sleep(interval).await;
+        };
+        if fresh {
+            let _ = market.sync().await.map_err(|e| error!("Failed to sync market: {:?}", e));
         }
+        Ok(market)
     }
 }

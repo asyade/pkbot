@@ -1,7 +1,9 @@
-use crate::prelude::*;
+use std::time::SystemTime;
 
-pub mod data;
+use crate::{prelude::*, reactor};
 use crate::exchange::MarketIdentifier;
+use crate::reactor::SyncMarket;
+use crate::store::MarketSettings;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GetAllMarketResult {
@@ -30,7 +32,7 @@ pub async fn get_all(
     let loaded = if loaded.unwrap_or(false) {
         let mut loaded = Vec::new();
         for (_, exchange) in reactor.store.trees.lock().unwrap().iter() {
-            loaded.push(exchange.market.clone())
+            loaded.push(exchange.id.clone())
         }
         Some(loaded)
     } else {
@@ -41,32 +43,64 @@ pub async fn get_all(
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct GetMarketResult {
+    settings: MarketSettings,
+    first_ohlc: Option<i64>,
+    last_ohlc: Option<i64>,
 }
 
-#[get("/?<exchange>&<base>&<quote>")]
-pub fn get(exchange: String, base: String, quote: String, reactor: &State<Reactor>) -> Result<Json<GetMarketResult>> {
-    Ok(unimplemented!())
+
+#[get("/<exchange>/<base>/<quote>")]
+pub async fn get(
+    exchange: String,
+    base: String,
+    quote: String,
+    reactor: &State<Reactor>,
+) -> Result<Json<GetMarketResult>> {
+    let id = MarketIdentifier {
+        exchange_name: exchange,
+        base,
+        quote,
+    };
+    let market = reactor.get_or_register_market(id).await?;
+    Ok(Json(GetMarketResult {
+        settings: market.store.settings()?,
+        first_ohlc: market.store.first_ohlc()?.map(|e| e.time),
+        last_ohlc: market.store.last_ohlc()?.map(|e| e.time),
+    }))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PostMarket {
-    market: MarketIdentifier,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct GetMarketOhlcResult {
+    data: Vec<OHLC>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PostMarketResult {}
-
-#[post("/", data = "<data>")]
-pub fn post(data: Json<PostMarket>, reactor: &State<Reactor>) -> Result<Json<PostMarketResult>> {
-    Ok(Json(PostMarketResult {}))
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeleteMarketResult {
-    success: bool,
-}
-
-#[delete("/<market_name>")]
-pub fn delete(market_name: String, reactor: &State<Reactor>) -> Result<Json<DeleteMarketResult>> {
-    Ok(Json(DeleteMarketResult { success: false }))
+#[get("/<exchange>/<base>/<quote>/ohlc?<from>&<to>&<exact>")]
+pub async fn get_ohlc(
+    exchange: String,
+    base: String,
+    quote: String,
+    from: i64,
+    to: Option<i64>,
+    exact: Option<bool>,
+    reactor: &State<Reactor>,
+) -> Result<Json<GetMarketOhlcResult>> {
+    let id = MarketIdentifier {
+        exchange_name: exchange,
+        base,
+        quote,
+    };
+    let market = reactor.get_or_register_market(id).await?;
+    let to = if let Some(end) = to {
+        end
+    } else {
+        market.store.last_ohlc()?.map(|e| e.time).unwrap_or(0)
+    };
+    let ohlc = if exact.unwrap_or(false) {
+        market.store.exact_range(from, to)?
+    } else {
+        market.store.close_range(from, to)?
+    };
+    Ok(Json(GetMarketOhlcResult {
+        data: ohlc,
+    }))
 }

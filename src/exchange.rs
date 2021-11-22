@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use crate::prelude::*;
 mod kraken;
 pub use kraken::*;
@@ -29,19 +27,17 @@ impl OHLCChunk {
     }
 }
 
-#[derive(Clone, Debug, bincode::Encode, bincode::Decode)]
+#[derive(Clone, Debug, bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize)]
 pub struct OHLC {
     pub time: i64,
     pub open: String,
     pub high: String,
     pub low: String,
     pub close: String,
-
     pub open_normalized: f64,
     pub high_normalized: f64,
     pub low_normalized: f64,
     pub close_normalized: f64,
-
     pub vwap: String,
     pub volume: String,
     pub count: u64,
@@ -75,11 +71,32 @@ impl OHLC {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct MarketIdentifier {
     pub base: String,
     pub quote: String,
     pub exchange_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MarketDefinition {
+    pub pairname: String,
+    pub pair_decimals: i32,
+    pub lot_decimals: i32,
+    pub lot_multiplier: i32,
+    pub leverage_buy: Vec<f64>,
+    pub leverage_sell: Vec<f64>,
+    pub fees: Vec<(f64, f64)>,
+    pub fees_maker: Option<Vec<(f64, f64)>>,
+    pub margin_call: f64,
+    pub margin_stop: f64,
+    pub ordermin: Option<String>,
+}
+
+impl std::fmt::Display for MarketIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}/{}", &self.exchange_name, &self.base, &self.quote)
+    }
 }
 
 impl MarketIdentifier {
