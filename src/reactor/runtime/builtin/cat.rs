@@ -23,37 +23,37 @@ async fn get_metrics(
 }
 
 pub async fn main(
-        reactor: Reactor,
-        mut args: Vec<String>,
-        _stdin: Option<Receiver<ProgramOutput>>,
-        stdout: Sender<ProgramOutput>,
-    ) {
-        args.insert(0, "cat".to_string());
-        let app = clap::App::new("cat").arg(
-            Arg::new("market_name")
-                .required(true)
-                .takes_value(true)
-                .multiple_values(true),
-        );
-        match app.try_get_matches_from(args) {
-            Ok(app) => {
-                let input = app.values_of("market_name").unwrap();
-                let mut results = Vec::new();
+    reactor: Reactor,
+    mut args: Vec<String>,
+    _stdin: Option<Receiver<ProgramOutput>>,
+    stdout: Sender<ProgramOutput>,
+) {
+    args.insert(0, "cat".to_string());
+    let app = clap::App::new("cat").arg(
+        Arg::new("market_name")
+            .required(true)
+            .takes_value(true)
+            .multiple_values(true),
+    );
+    match app.try_get_matches_from(args) {
+        Ok(app) => {
+            let input = app.values_of("market_name").unwrap();
+            let mut results = Vec::new();
 
-                for val in input.into_iter() {
-                    results.push(
-                        get_metrics(&reactor, val.to_string(), 0, None, false)
-                            .await
-                            .unwrap_or_else(|_| Vec::new()),
-                    );
-                }
-                buitlin_result!(
-                    stdout,
-                    serde_json::to_value(&results).unwrap_or_else(|_| Value::Null)
+            for val in input.into_iter() {
+                results.push(
+                    get_metrics(&reactor, val.to_string(), 0, None, false)
+                        .await
+                        .unwrap_or_else(|_| Vec::new()),
                 );
             }
-            Err(e) => {
-                buitlin_panic!(stdout, "{}", e);
-            }
+            buitlin_result!(
+                stdout,
+                serde_json::to_value(&results).unwrap_or_else(|_| Value::Null)
+            );
+        }
+        Err(e) => {
+            buitlin_panic!(stdout, "{}", e);
         }
     }
+}

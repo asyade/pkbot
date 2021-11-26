@@ -1,8 +1,5 @@
-use std::time::SystemTime;
-
-use crate::{prelude::*, reactor};
 use crate::exchange::MarketIdentifier;
-use crate::reactor::SyncMarket;
+use crate::prelude::*;
 use crate::store::MarketSettings;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -19,7 +16,7 @@ pub async fn get_all(
 ) -> Result<Json<GetAllMarketResult>> {
     let available = if available.unwrap_or(false) {
         let mut available = Vec::new();
-        for (name, exchange) in reactor.exchanges.lock().await.iter() {
+        for (name, exchange) in reactor.exchanges.read().await.iter() {
             match exchange.lock().await.get_markets().await {
                 Ok(mut markets) => available.append(&mut markets),
                 Err(e) => error!("Failed to fetch markets: EXCHANGE={}, ERROR={}", name, e),
@@ -47,7 +44,6 @@ pub struct GetMarketResult {
     first_ohlc: Option<i64>,
     last_ohlc: Option<i64>,
 }
-
 
 #[get("/<exchange>/<base>/<quote>")]
 pub async fn get(
@@ -100,7 +96,5 @@ pub async fn get_ohlc(
     } else {
         market.store.close_range(from, to)?
     };
-    Ok(Json(GetMarketOhlcResult {
-        data: ohlc,
-    }))
+    Ok(Json(GetMarketOhlcResult { data: ohlc }))
 }

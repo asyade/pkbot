@@ -33,7 +33,11 @@ impl std::default::Default for MarketSettings {
 
 impl StoreMarketHandle {
     pub fn new(tree: sled::Tree, settings_tree: sled::Tree, id: MarketIdentifier) -> Self {
-        Self { tree, settings_tree, id }
+        Self {
+            tree,
+            settings_tree,
+            id,
+        }
     }
 
     pub fn settings(&self) -> Result<MarketSettings> {
@@ -62,7 +66,8 @@ impl StoreMarketHandle {
 
     pub fn set_settings(&self, settings: &MarketSettings) -> Result<()> {
         let encoded = bincode::encode_to_vec(settings, Configuration::standard())?;
-        self.settings_tree.insert(format!("{}", &self.id).as_bytes(), encoded)?;
+        self.settings_tree
+            .insert(format!("{}", &self.id).as_bytes(), encoded)?;
         Ok(())
     }
 
@@ -81,7 +86,7 @@ impl StoreMarketHandle {
         Ok(closest)
     }
 
-    pub fn close_range(&self, start: i64, end: i64) -> Result<Vec<OHLC>> {        
+    pub fn close_range(&self, start: i64, end: i64) -> Result<Vec<OHLC>> {
         let start = self.close_to(start)?.ok_or_else(|| Error::NoData)?;
         let end = self.close_to(end)?.ok_or_else(|| Error::NoData)?;
         Ok(self.exact_range(start, end)?)
@@ -95,7 +100,7 @@ impl StoreMarketHandle {
             offset = self.next_ohlc(offset)?.ok_or_else(|| Error::NoData)?.time;
             ret.push(ohlc);
             if offset == end {
-                break
+                break;
             }
         }
         Ok(ret)
@@ -133,11 +138,7 @@ impl StoreMarketHandle {
         let resume_from = if let Some(last) = last.as_ref() {
             last.time as u64
         } else {
-            SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs()
-                - DEFAULT_REFRESH_SINCE
+            0
         };
         let exchange_lock = exchange.lock().await;
         let chunk = exchange_lock.get_ohlc(&self.id, resume_from).await?;

@@ -1,17 +1,14 @@
-use std::{time::SystemTime};
-
 use crate::{exchange::MarketIdentifier, prelude::*, reactor::SyncExchange};
 use sled::{Db, IVec};
 
 mod market;
 pub use market::*;
 
-const DEFAULT_REFRESH_SINCE: u64 = 60 * 60 * 24 * 30;
-
 pub struct Store {
     db: Db,
 }
 
+#[derive(Clone)]
 pub struct StoreHandle {
     db: Db,
     settings_tree: sled::Tree,
@@ -37,7 +34,10 @@ impl Store {
 
     pub fn handle(&self) -> StoreHandle {
         StoreHandle {
-            settings_tree: self.db.open_tree("settings").expect("Failed to create settings store"),
+            settings_tree: self
+                .db
+                .open_tree("settings")
+                .expect("Failed to create settings store"),
             db: self.db.clone(),
             trees: Arc::new(std::sync::Mutex::new(HashMap::new())),
         }
@@ -51,10 +51,10 @@ impl StoreHandle {
             return Ok(exchange.clone());
         }
         let tree = self.db.open_tree(&uid)?;
-        self.trees
-            .lock()
-            .unwrap()
-            .insert(uid.clone(), StoreMarketHandle::new(tree, self.settings_tree.clone(), market));
+        self.trees.lock().unwrap().insert(
+            uid.clone(),
+            StoreMarketHandle::new(tree, self.settings_tree.clone(), market),
+        );
         Ok(self.trees.lock().unwrap()[&uid].clone())
     }
 }

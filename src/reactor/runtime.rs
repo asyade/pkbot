@@ -69,7 +69,6 @@ impl ProgramRuntime {
             .content
             .arguments();
 
-
         let _handle = match program_name.as_str() {
             "ls" => tokio::spawn(ls::main(reactor.clone(), arguments, stdin, stdout)),
             "cat" => tokio::spawn(cat::main(reactor.clone(), arguments, stdin, stdout)),
@@ -77,10 +76,15 @@ impl ProgramRuntime {
             _ => {
                 let name = program_name.clone();
                 tokio::spawn((async move || {
-                    let _ = stdout.send(ProgramOutput::Exit {
-                        message: Some(format!("Unknown command: {}", &name)),
-                        status: ProgramStatus::Error,
-                    }).await.map_err(|e| log::error!("Failed to send output of buitlin to stdout: ERROR={}", e));
+                    let _ = stdout
+                        .send(ProgramOutput::Exit {
+                            message: Some(format!("Unknown command: {}", &name)),
+                            status: ProgramStatus::Error,
+                        })
+                        .await
+                        .map_err(|e| {
+                            log::error!("Failed to send output of buitlin to stdout: ERROR={}", e)
+                        });
                 })())
             }
         };

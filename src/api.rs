@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
-mod market;
 mod cors;
+mod market;
 use cors::CORS;
 
 pub async fn spawn(reactor: Reactor) -> Result<()> {
@@ -10,11 +10,7 @@ pub async fn spawn(reactor: Reactor) -> Result<()> {
         .attach(CORS)
         .mount(
             "/market",
-            routes![
-                market::get,
-                market::get_all,
-                market::get_ohlc,
-            ],
+            routes![market::get, market::get_all, market::get_ohlc,],
         )
         .launch()
         .await?;

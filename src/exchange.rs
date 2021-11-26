@@ -78,6 +78,17 @@ pub struct MarketIdentifier {
     pub exchange_name: String,
 }
 
+impl<T: AsRef<str>> From<T> for MarketIdentifier {
+    fn from(f: T) -> Self {
+        let mut splited = f.as_ref().split("/");
+        MarketIdentifier {
+            exchange_name: splited.next().unwrap_or("").to_string(),
+            base: splited.next().unwrap_or("").to_uppercase(),
+            quote: splited.next().unwrap_or("").to_uppercase(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarketDefinition {
     pub pairname: String,
@@ -116,6 +127,8 @@ pub trait Exchange {
     async fn get_severt_time(&self) -> Result<NaiveDateTime>;
 
     async fn get_ohlc(&self, id: &MarketIdentifier, since: u64) -> Result<OHLCChunk>;
+
+    async fn refresh_market_cache(&self) -> Result<()>;
 
     async fn get_markets(&self) -> Result<Vec<MarketIdentifier>>;
 }

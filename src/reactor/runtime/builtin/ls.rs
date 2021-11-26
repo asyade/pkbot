@@ -14,7 +14,8 @@ async fn get_markets(
     quote_filter: Option<String>,
 ) -> Vec<MarketIdentifier> {
     let mut available = Vec::new();
-    for (name, exchange) in reactor.exchanges
+    for (name, exchange) in reactor
+        .exchanges
         .read()
         .await
         .iter()
@@ -34,39 +35,38 @@ async fn get_markets(
     available
 }
 pub async fn main(
-        reactor: Reactor,
-        mut args: Vec<String>,
-        _stdin: Option<Receiver<ProgramOutput>>,
-        stdout: Sender<ProgramOutput>,
-    ) {
-        args.insert(0, "ls".to_string());
-        let app = clap::App::new("ls").arg(Arg::new("exchange_name").index(1).required(false));
-        match app.try_get_matches_from(args) {
-            Ok(app) => {
-                let exchange = app.value_of("exchange_name");
-                let mut splited = exchange.unwrap_or("").split("/");
-                let exchange = splited.next().filter(|e| *e != "");
-                let base = splited
-                    .next()
-                    .map(|e| e.trim().to_uppercase())
-                    .filter(|e| *e != "" && *e != "*");
-                let quote = splited
-                    .next()
-                    .map(|e| e.trim().to_uppercase())
-                    .filter(|e| *e != "" && *e != "*");
-                let results: Vec<String> = 
-                    get_markets(reactor, exchange, base, quote)
-                    .await
-                    .into_iter()
-                    .map(|e| format!("{}/{}/{}", e.exchange_name, e.base, e.quote))
-                    .collect();
-                buitlin_result!(
-                    stdout,
-                    serde_json::to_value(&results).unwrap_or_else(|_| Value::Null)
-                );
-            }
-            Err(e) => {
-                buitlin_panic!(stdout, "{}", e);
-            }
+    reactor: Reactor,
+    mut args: Vec<String>,
+    _stdin: Option<Receiver<ProgramOutput>>,
+    stdout: Sender<ProgramOutput>,
+) {
+    args.insert(0, "ls".to_string());
+    let app = clap::App::new("ls").arg(Arg::new("exchange_name").index(1).required(false));
+    match app.try_get_matches_from(args) {
+        Ok(app) => {
+            let exchange = app.value_of("exchange_name");
+            let mut splited = exchange.unwrap_or("").split("/");
+            let exchange = splited.next().filter(|e| *e != "");
+            let base = splited
+                .next()
+                .map(|e| e.trim().to_uppercase())
+                .filter(|e| *e != "" && *e != "*");
+            let quote = splited
+                .next()
+                .map(|e| e.trim().to_uppercase())
+                .filter(|e| *e != "" && *e != "*");
+            let results: Vec<String> = get_markets(reactor, exchange, base, quote)
+                .await
+                .into_iter()
+                .map(|e| format!("{}/{}/{}", e.exchange_name, e.base, e.quote))
+                .collect();
+            buitlin_result!(
+                stdout,
+                serde_json::to_value(&results).unwrap_or_else(|_| Value::Null)
+            );
+        }
+        Err(e) => {
+            buitlin_panic!(stdout, "{}", e);
         }
     }
+}
