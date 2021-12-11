@@ -1,13 +1,18 @@
 use super::*;
 use crate::reactor::SyncExchange;
 use kraken_sdk_rest::{Client, Interval};
+use tokio::sync::OwnedMutexGuard;
+
+pub static EXCHANGE_NAME: &str = "kraken";
 
 pub struct KrakenExchange {
     pub api_key: String,
     pub api_private_key: String,
     pub client: Client,
-    pub markets_cache: Arc<Mutex<Option<HashMap<MarketIdentifier, MarketDefinition>>>>,
+    pub markets_cache: Arc<Mutex<MarketCacheCell>>,
 }
+
+type MarketCacheCell = Option<HashMap<MarketIdentifier, MarketDefinition>>;
 
 impl KrakenExchange {
     pub fn new(api_key: String, api_private_key: String) -> Self {
@@ -30,12 +35,48 @@ impl KrakenExchange {
     pub fn boxed(self) -> SyncExchange {
         Arc::new(Mutex::new(Box::new(self)))
     }
+
+    async fn refresh_market_cache(
+        mut lock: OwnedMutexGuard<MarketCacheCell>,
+        client: &Client,
+    ) -> Result<()> {
+        // let mut lock = self.markets_cache.lock().await;
+        let pairs = client.get_asset_pairs().send().await?;
+        let mut map = HashMap::new();
+        for (_, pair) in pairs {
+            let id = MarketIdentifier {
+                exchange_name: EXCHANGE_NAME.to_string(),
+                base: pair.base,
+                quote: pair.quote,
+            };
+            let age = std::time::SystemTime::now();
+            let def = MarketDefinition {
+                pairname: pair.altname,
+                pair_decimals: pair.pair_decimals,
+                lot_decimals: pair.lot_decimals,
+                lot_multiplier: pair.lot_multiplier,
+                leverage_buy: pair.leverage_buy,
+                leverage_sell: pair.leverage_sell,
+                fees: pair.fees.into_iter().map(|e| (e.0, e.1)).collect(),
+                fees_maker: pair
+                    .fees_maker
+                    .map(|e| e.into_iter().map(|e| (e.0, e.1)).collect()),
+                margin_call: pair.margin_call,
+                margin_stop: pair.margin_stop,
+                ordermin: pair.ordermin,
+                age,
+            };
+            map.insert(id, def);
+        }
+        lock.replace(map.clone());
+        Ok(())
+    }
 }
 
 #[async_trait]
 impl Exchange for KrakenExchange {
     fn name(&self) -> String {
-        String::from("kraken")
+        String::from(EXCHANGE_NAME)
     }
 
     async fn get_severt_time(&self) -> Result<NaiveDateTime> {
@@ -88,69 +129,48 @@ impl Exchange for KrakenExchange {
     }
 
     async fn refresh_market_cache(&self) -> Result<()> {
-        let mut lock = self.markets_cache.lock().await;
-        let pairs = self.client.get_asset_pairs().send().await?;
-        let mut map = HashMap::new();
-        for (_, pair) in pairs {
-            let id = MarketIdentifier {
-                exchange_name: self.name(),
-                base: pair.base,
-                quote: pair.quote,
-            };
-            let def = MarketDefinition {
-                pairname: pair.altname,
-                pair_decimals: pair.pair_decimals,
-                lot_decimals: pair.lot_decimals,
-                lot_multiplier: pair.lot_multiplier,
-                leverage_buy: pair.leverage_buy,
-                leverage_sell: pair.leverage_sell,
-                fees: pair.fees.into_iter().map(|e| (e.0, e.1)).collect(),
-                fees_maker: pair
-                    .fees_maker
-                    .map(|e| e.into_iter().map(|e| (e.0, e.1)).collect()),
-                margin_call: pair.margin_call,
-                margin_stop: pair.margin_stop,
-                ordermin: pair.ordermin,
-            };
-            map.insert(id, def);
-        }
-        lock.replace(map.clone());
+        let lock = self.markets_cache.clone().lock_owned().await;
+        Self::refresh_market_cache(lock, &self.client).await?;
         Ok(())
     }
 
-    async fn get_markets(&self) -> Result<Vec<MarketIdentifier>> {
-        let mut lock = self.markets_cache.lock().await;
-        if let Some(markets) = lock.clone() {
-            Ok(markets.keys().cloned().collect())
-        } else {
-            let pairs = self.client.get_asset_pairs().send().await?;
-            let mut map = HashMap::new();
-            for (_, pair) in pairs {
-                let id = MarketIdentifier {
-                    exchange_name: self.name(),
-                    base: pair.base,
-                    quote: pair.quote,
-                };
-                let def = MarketDefinition {
-                    pairname: pair.altname,
-                    pair_decimals: pair.pair_decimals,
-                    lot_decimals: pair.lot_decimals,
-                    lot_multiplier: pair.lot_multiplier,
-                    leverage_buy: pair.leverage_buy,
-                    leverage_sell: pair.leverage_sell,
-                    fees: pair.fees.into_iter().map(|e| (e.0, e.1)).collect(),
-                    fees_maker: pair
-                        .fees_maker
-                        .map(|e| e.into_iter().map(|e| (e.0, e.1)).collect()),
-                    margin_call: pair.margin_call,
-                    margin_stop: pair.margin_stop,
-                    ordermin: pair.ordermin,
-                };
-                map.insert(id, def);
+    async fn get_market_definition(
+        &self,
+        id: &MarketIdentifier,
+        max_age: Option<Duration>,
+    ) -> Result<MarketDefinition> {
+        let lock = self.markets_cache.clone().lock_owned().await;
+        if let Some(market) = lock
+            .as_ref()
+            .and_then(|markets| markets.get(id).map(|e| e.clone()))
+        {
+            if max_age
+                .map(|e| market.age.elapsed().unwrap() < e)
+                .unwrap_or(true)
+            {
+                return Ok(market.clone());
             }
-            let keys = map.keys().cloned().collect();
-            lock.replace(map.clone());
-            Ok(keys)
+        }
+        Self::refresh_market_cache(lock, &self.client).await?;
+        let lock = self.markets_cache.clone().lock_owned().await;
+        if let Some(markets) = lock.as_ref() {
+            return markets.get(id).cloned().ok_or(Error::NoData);
+        } else {
+            return Err(Error::NoData);
+        }
+    }
+
+    async fn get_markets(&self) -> Result<Vec<MarketIdentifier>> {
+        let lock = self.markets_cache.clone().lock_owned().await;
+        if let Some(markets) = lock.as_ref().map(|e| e.keys().map(|e| e.clone()).collect()) {
+            return Ok(markets);
+        }
+        Self::refresh_market_cache(lock, &self.client).await?;
+        let lock = self.markets_cache.clone().lock_owned().await;
+        if let Some(markets) = lock.as_ref().map(|e| e.keys().map(|e| e.clone()).collect()) {
+            return Ok(markets);
+        } else {
+            return Err(Error::NoData);
         }
     }
 }

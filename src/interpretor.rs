@@ -12,9 +12,20 @@ pub enum ProgramOutput {
         message: Option<String>,
         status: ProgramStatus,
     },
+    Text {
+        message: String,
+    },
     Json {
         content: Value,
     },
+}
+
+impl ProgramOutput {
+    pub fn json<T: Serialize>(ser: T) -> Result<Self> {
+        Ok(ProgramOutput::Json {
+            content: serde_json::to_value(ser)?,
+        })
+    }
 }
 
 pub type ProgramIdentifier = u64;

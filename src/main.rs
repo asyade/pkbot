@@ -59,7 +59,12 @@ async fn main() {
                         if let Some(message) = message {
                             println!("{}", message);
                         }
-                        break;
+                    }
+                    ReactorEvent::ProgramOutput {
+                        content: ProgramOutput::Text { message },
+                        ..
+                    } => {
+                        println!("{}", message);
                     }
                     ReactorEvent::ProgramOutput {
                         content: ProgramOutput::Json { content },
@@ -71,6 +76,8 @@ async fn main() {
                                 .unwrap_or(String::from("Failed to prettify"))
                         );
                     }
+                    ReactorEvent::RuntimeCreated { .. } => {}
+                    ReactorEvent::RuntimeDestroyed { id: 0 } => break,
                     e => {
                         dbg!(e);
                     }

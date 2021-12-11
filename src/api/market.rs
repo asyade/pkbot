@@ -57,7 +57,7 @@ pub async fn get(
         base,
         quote,
     };
-    let market = reactor.get_or_register_market(id).await?;
+    let market = reactor.get_or_register_market(&id).await?;
     Ok(Json(GetMarketResult {
         settings: market.store.settings()?,
         first_ohlc: market.store.first_ohlc()?.map(|e| e.time),
@@ -85,7 +85,7 @@ pub async fn get_ohlc(
         base,
         quote,
     };
-    let market = reactor.get_or_register_market(id).await?;
+    let market = reactor.get_or_register_market(&id).await?;
     let to = if let Some(end) = to {
         end
     } else {

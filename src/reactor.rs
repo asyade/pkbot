@@ -22,6 +22,12 @@ pub enum ReactorEvent {
         id: ProgramIdentifier,
         status: ProgramStatus,
     },
+    RuntimeCreated {
+        id: ProgramIdentifier,
+    },
+    RuntimeDestroyed {
+        id: ProgramIdentifier,
+    },
 }
 
 pub type SyncMap<K, V> = Arc<RwLock<HashMap<K, V>>>;
@@ -79,7 +85,10 @@ impl Reactor {
         let mut receiver = runtime.stdout.take().unwrap();
         let runtime_id = runtime.id;
         reactor.programs.write().await.insert(runtime_id, runtime);
-
+        reactor
+            .listeners
+            .broadcast(ReactorEvent::RuntimeCreated { id: runtime_id })
+            .await;
         log::trace!("Handling runtime: ID={}", runtime_id);
         while let Some(message) = receiver.recv().await {
             reactor
@@ -92,6 +101,10 @@ impl Reactor {
         }
         log::trace!("Removing runtime: ID={}", runtime_id);
         reactor.programs.write().await.remove(&runtime_id);
+        reactor
+            .listeners
+            .broadcast(ReactorEvent::RuntimeDestroyed { id: runtime_id })
+            .await;
     }
 
     pub async fn spawn_program(&self, program: Program) {
@@ -104,14 +117,14 @@ impl Reactor {
         self.exchanges.write().await.insert(name, exchange);
     }
 
-    pub async fn get_or_register_market(&self, id: MarketIdentifier) -> Result<SyncMarket> {
+    pub async fn get_or_register_market(&self, id: &MarketIdentifier) -> Result<SyncMarket> {
         let (market, fresh) = {
             let mut lock = self.markets.write().await;
             if let Some(market) = lock.get(&id) {
                 (market.clone(), false)
             } else {
                 let market = SyncMarket::new(&self, id.clone()).await?;
-                lock.insert(id, market.clone());
+                lock.insert(id.clone(), market.clone());
                 (market, true)
             }
         };

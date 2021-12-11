@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::interpretor::{ProgramOutput, ProgramStatus};
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Error, Debug)]
@@ -10,6 +12,8 @@ pub enum Error {
     IO(#[from] std::io::Error),
     #[error("database: {0}")]
     Database(#[from] sled::Error),
+    #[error("text encoding: {0}")]
+    EncodingText(#[from] serde_json::error::Error),
     #[error("encoding: {0}")]
     Encoding(#[from] bincode::error::EncodeError),
     #[error("decode: {0}")]
@@ -26,6 +30,8 @@ pub enum Error {
     PairNotLoaded,
     #[error("Parsing error: {0}")]
     Parsing(String, std::ops::Range<usize>),
+    #[error("Arguments parsing: {0}")]
+    Clap(#[from] clap::Error),
 }
 
 impl<'r> rocket::response::Responder<'r, 'static> for crate::error::Error {
@@ -44,5 +50,14 @@ impl<'r> rocket::response::Responder<'r, 'static> for crate::error::Error {
             )
             .respond_to(r)?,
         )
+    }
+}
+
+impl Into<ProgramOutput> for Error {
+    fn into(self) -> ProgramOutput {
+        ProgramOutput::Exit {
+            message: Some(format!("{}", self)),
+            status: ProgramStatus::Error,
+        }
     }
 }

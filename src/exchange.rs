@@ -91,6 +91,7 @@ impl<T: AsRef<str>> From<T> for MarketIdentifier {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MarketDefinition {
+    pub age: SystemTime,
     pub pairname: String,
     pub pair_decimals: i32,
     pub lot_decimals: i32,
@@ -131,4 +132,10 @@ pub trait Exchange {
     async fn refresh_market_cache(&self) -> Result<()>;
 
     async fn get_markets(&self) -> Result<Vec<MarketIdentifier>>;
+
+    async fn get_market_definition(
+        &self,
+        id: &MarketIdentifier,
+        max_age: Option<Duration>,
+    ) -> Result<MarketDefinition>;
 }
