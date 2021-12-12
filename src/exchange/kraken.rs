@@ -111,7 +111,6 @@ impl Exchange for KrakenExchange {
                 super::OHLC::new(false, e.0, e.1, e.2, e.3, e.4, e.5, e.6, e.7)
             });
             chunk.extend(sub_chunk);
-            dbg!(original_since, sub_chunk_len);
             if original_since == 0 && sub_chunk_len > 0 {
                 chunk[0].first_available = true;
             }

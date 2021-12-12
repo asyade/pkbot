@@ -1,4 +1,4 @@
-use crate::{exchange::MarketIdentifier, prelude::*, reactor::SyncExchange};
+use crate::{exchange::MarketIdentifier, prelude::*};
 use sled::{Db, IVec};
 
 mod market;

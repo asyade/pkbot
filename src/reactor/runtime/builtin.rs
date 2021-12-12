@@ -111,18 +111,52 @@ impl ArgumentInterval {
     }
 }
 
+fn human_duration(str: &str) -> Result<Duration> {
+    let str = str.to_lowercase();
+    if str.ends_with("s") {
+        let parsed: u64 = str[..str.len() - 1].parse()?;
+        Ok(Duration::from_secs(parsed))
+    } else if str.ends_with("m") {
+        let parsed: u64 = str[..str.len() - 1].parse()?;
+        Ok(Duration::from_secs(parsed * 60))
+    } else if str.ends_with("h") {
+        let parsed: u64 = str[..str.len() - 1].parse()?;
+        Ok(Duration::from_secs(parsed * 60 * 60))
+    } else if str.ends_with("d") {
+        let parsed: u64 = str[..str.len() - 1].parse()?;
+        Ok(Duration::from_secs(parsed * 60 * 60 * 24))
+    } else {
+        Ok(Duration::from_secs(str[..str.len()].parse()?))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ArgumentTimestamp {
     Absolute { date: DateTime<FixedOffset> },
-    Relative { since: Duration, crtime: SystemTime },
+    RelativeToNow { delta: Duration, crtime: SystemTime },
 }
 
 impl ArgumentTimestamp {
     pub fn new(raw: &str, crtime: SystemTime) -> Result<Self> {
-        Ok(ArgumentTimestamp::Absolute {
-            date: DateTime::parse_from_rfc3339(raw)
-                .map_err(|_| Error::Parsing(raw.to_string(), 3..0))?,
-        })
+        if raw.starts_with("NOW-") {
+            let mut splited = raw.split("-");
+            let left = splited.next();
+            let right = splited.next();
+            match (left, right) {
+                (Some(_), Some(raw)) => {
+                    return Ok(ArgumentTimestamp::RelativeToNow {
+                        crtime,
+                        delta: human_duration(raw)?,
+                    })
+                },
+                _ => return Err(Error::Parsing(raw.to_string(), 3..0))
+            }
+        } else {
+            Ok(ArgumentTimestamp::Absolute {
+                date: DateTime::parse_from_rfc3339(raw)
+                    .map_err(|_| Error::Parsing(raw.to_string(), 3..0))?,
+            })
+        }
     }
 
     pub fn validator(raw: &str) -> std::result::Result<(), String> {
@@ -134,10 +168,10 @@ impl ArgumentTimestamp {
 
     pub fn timestamp(&self) -> i64 {
         match self {
-            ArgumentTimestamp::Absolute { .. } => unimplemented!(),
-            ArgumentTimestamp::Relative { since, crtime } => {
-                crtime.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64 - since.as_secs() as i64
-            }
+            ArgumentTimestamp::Absolute { date } => date.timestamp(),
+            ArgumentTimestamp::RelativeToNow { delta, crtime } => {
+                crtime.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64 - delta.as_secs() as i64
+            },
         }
     }
 }

@@ -118,7 +118,7 @@ impl Reactor {
     }
 
     pub async fn get_or_register_market(&self, id: &MarketIdentifier) -> Result<SyncMarket> {
-        let (market, fresh) = {
+        let (market, _fresh) = {
             let mut lock = self.markets.write().await;
             if let Some(market) = lock.get(&id) {
                 (market.clone(), false)

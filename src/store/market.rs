@@ -1,8 +1,3 @@
-use core::fmt;
-
-use sled::transaction::TransactionError;
-use tokio::runtime::Handle;
-
 use super::*;
 
 macro_rules! try_result_opt {
@@ -45,6 +40,7 @@ impl Interval {
         }) * 60
     }
 
+    #[allow(unused)]
     pub fn from_minuts(mins: i64) -> Result<Self> {
         match mins {
             1 => Ok(Interval::Min1),
@@ -85,6 +81,7 @@ impl std::fmt::Display for Interval {
 pub struct StoreMarketHandle {
     db: Db,
     trees_cache: Arc<RwLock<HashMap<Interval, StoreMarketDataHandle>>>,
+    #[allow(unused)]
     settings_tree: sled::Tree,
     pub id: MarketIdentifier,
 }
@@ -112,6 +109,7 @@ impl StoreMarketHandle {
         }
     }
 
+    #[allow(unused)]
     pub fn settings(&self) -> Result<MarketSettings> {
         if let Some(raw) = self
             .settings_tree
@@ -164,6 +162,7 @@ impl StoreMarketHandle {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct StoreMarketDataHandle {
     id: MarketIdentifier,
@@ -240,6 +239,7 @@ impl StoreMarketDataHandle {
         try_result_opt!(self.tree.get(&time.to_be_bytes()))
     }
 
+    #[allow(unused)]
     pub fn prev_ohlc(&self, time: Timestamp) -> Result<Option<OHLC>> {
         try_result_opt!(self
             .tree
@@ -258,6 +258,7 @@ impl StoreMarketDataHandle {
         try_result_opt!(self.tree.first().map(|e| e.map(|(_, e)| e)))
     }
 
+    #[allow(unused)]
     pub fn last_ohlc(&self) -> Result<Option<OHLC>> {
         try_result_opt!(self.tree.last().map(|e| e.map(|(_, e)| e)))
     }
