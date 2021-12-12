@@ -1,4 +1,4 @@
-use std::{time::UNIX_EPOCH, process::ChildStdout};
+use std::time::UNIX_EPOCH;
 
 use super::*;
 use chrono::{DateTime, FixedOffset};
@@ -50,47 +50,106 @@ pub mod echo;
 pub mod ls;
 pub mod sleep;
 
-enum ArgumentTimestamp {
-    Absolute {
-        date: DateTime<FixedOffset>,
-    },
-    Relative {
-        since: Duration,
-        crtime: SystemTime,
+#[derive(Debug, Clone)]
+pub struct ArgumentInterval {
+    pub raw: String,
+    pub normalized: Interval,
+}
+
+impl ArgumentInterval {
+    pub fn new(raw: &str) -> Result<ArgumentInterval> {
+        let raw = raw.to_lowercase();
+        match raw.as_str() {
+            "1m" => Ok(Self {
+                raw,
+                normalized: Interval::Min1,
+            }),
+            "5m" => Ok(Self {
+                raw,
+                normalized: Interval::Min5,
+            }),
+            "15m" => Ok(Self {
+                raw,
+                normalized: Interval::Min15,
+            }),
+            "30m" => Ok(Self {
+                raw,
+                normalized: Interval::Min30,
+            }),
+            "1h" => Ok(Self {
+                raw,
+                normalized: Interval::Hour1,
+            }),
+            "4h" => Ok(Self {
+                raw,
+                normalized: Interval::Hour4,
+            }),
+            "1d" => Ok(Self {
+                raw,
+                normalized: Interval::Day1,
+            }),
+            "7d" => Ok(Self {
+                raw,
+                normalized: Interval::Day7,
+            }),
+            "15d" => Ok(Self {
+                raw,
+                normalized: Interval::Day15,
+            }),
+            _ => Err(Error::Parsing(raw, 0..0)),
+        }
     }
+
+    pub fn validator(raw: &str) -> std::result::Result<(), String> {
+        Self::new(raw).map_err(|_| {
+            format!(
+                "Wrong interval format\n    Found `{}`\n    Expedted one of: 1m, 5m, 15m, 30m, 1h, 4h, 1d, 7d, 15d",
+                raw,
+            )
+        })?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ArgumentTimestamp {
+    Absolute { date: DateTime<FixedOffset> },
+    Relative { since: Duration, crtime: SystemTime },
 }
 
 impl ArgumentTimestamp {
     pub fn new(raw: &str, crtime: SystemTime) -> Result<Self> {
-        if raw.starts_with("NOW-") {
-            let mut splited = raw.split("-");
-            let since = splited.nth(1).map(|e| e.parse().ok()).flatten().ok_or_else(|| Error::Parsing(raw.to_string(), 3..0))?;
-            Ok(ArgumentTimestamp::Relative {
-                since: Duration::from_secs(since),
-                crtime,
-            })
-        } else {
-            Ok(ArgumentTimestamp::Absolute {
-                date: unimplemented!(),
-            })
-        }
+        Ok(ArgumentTimestamp::Absolute {
+            date: DateTime::parse_from_rfc3339(raw)
+                .map_err(|_| Error::Parsing(raw.to_string(), 3..0))?,
+        })
+    }
+
+    pub fn validator(raw: &str) -> std::result::Result<(), String> {
+        let _ = Self::new(raw, SystemTime::now()).map_err(|_| {
+            String::from("Wrong time format, format must be one of:\n    rfc3339: `1996-12-19T16:39:57-08:00`\n    UNIX timestamp: `1639239687``")
+        })?;
+        Ok(())
     }
 
     pub fn timestamp(&self) -> i64 {
         match self {
-            ArgumentTimestamp::Absolute{..} => unimplemented!(),
+            ArgumentTimestamp::Absolute { .. } => unimplemented!(),
             ArgumentTimestamp::Relative { since, crtime } => {
                 crtime.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64 - since.as_secs() as i64
-            },
+            }
         }
     }
 }
 
-pub async fn try_builtin<F: Future<Output = Result<ProgramOutput>> + 'static>(f: F, stdout: Sender<ProgramOutput>) {
+pub async fn try_builtin<F: Future<Output = Result<ProgramOutput>> + 'static>(
+    f: F,
+    stdout: Sender<ProgramOutput>,
+) {
     match f.await {
         Ok(res) => {
             let _ = stdout.send(res).await;
-        },
+        }
         Err(e) => {
             let _ = stdout.send(e.into()).await;
         }

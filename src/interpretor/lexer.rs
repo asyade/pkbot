@@ -17,7 +17,7 @@ pub enum Token {
     #[regex("([a-zA-Z_-]+|/+|\\*+)+")]
     Ident,
     // #[regex("/\"(?:\\.)*\"/")]
-    #[regex(r#""([^"\\]|\\t|\\u|\\n|\\")*""#)]
+    #[regex(r#"("([^"\\]|\\t|\\u|\\n|\\")*")|([a-zA-Z_-]*|[0-9]*[a-zA-Z_-]*)"#)]
     LiteralString,
     #[regex("-?[0-9]+")]
     LiteralInteger,

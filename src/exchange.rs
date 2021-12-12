@@ -4,9 +4,9 @@ pub use kraken::*;
 
 pub struct OHLCChunk {
     pub data: Vec<OHLC>,
-    pub begin: i64,
-    pub end: i64,
-    pub duration: i64,
+    pub begin: Timestamp,
+    pub end: Timestamp,
+    pub duration: Timestamp,
     pub interval: i64,
 }
 
@@ -29,7 +29,8 @@ impl OHLCChunk {
 
 #[derive(Clone, Debug, bincode::Encode, bincode::Decode, serde::Serialize, serde::Deserialize)]
 pub struct OHLC {
-    pub time: i64,
+    pub first_available: bool,
+    pub time: Timestamp,
     pub open: String,
     pub high: String,
     pub low: String,
@@ -45,7 +46,8 @@ pub struct OHLC {
 
 impl OHLC {
     pub fn new(
-        time: i64,
+        first_available: bool,
+        time: Timestamp,
         open: String,
         high: String,
         low: String,
@@ -55,6 +57,7 @@ impl OHLC {
         count: u64,
     ) -> Self {
         Self {
+            first_available,
             time,
             open_normalized: open.parse().unwrap(),
             high_normalized: high.parse().unwrap(),
@@ -112,8 +115,12 @@ impl std::fmt::Display for MarketIdentifier {
 }
 
 impl MarketIdentifier {
-    pub fn uid(&self) -> String {
+    pub fn tree_uid(&self) -> String {
         format!("{}_{}", self.exchange_name, self.pair_name())
+    }
+
+    pub fn data_tree_uid(&self, interval: Interval) -> String {
+        format!("{}_{}", self.tree_uid(), interval.as_secs())
     }
 
     pub fn pair_name(&self) -> String {
@@ -127,7 +134,12 @@ pub trait Exchange {
 
     async fn get_severt_time(&self) -> Result<NaiveDateTime>;
 
-    async fn get_ohlc(&self, id: &MarketIdentifier, since: u64) -> Result<OHLCChunk>;
+    async fn get_ohlc(
+        &self,
+        id: &MarketIdentifier,
+        since: Timestamp,
+        interval: Interval,
+    ) -> Result<OHLCChunk>;
 
     async fn refresh_market_cache(&self) -> Result<()>;
 

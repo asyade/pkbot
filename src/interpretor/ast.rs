@@ -139,6 +139,6 @@ impl CommandAstNode {
             }
         }
         let (root, prev) = Self::parse_one(&mut lexer)?;
-        inner_parse(lexer, root.ok_or(Error::NoData)?, prev)
+        dbg!(inner_parse(lexer, root.ok_or(Error::NoData)?, prev))
     }
 }

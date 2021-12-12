@@ -9,7 +9,7 @@ pub(crate) mod interpretor;
 pub(crate) mod reactor;
 pub(crate) mod store;
 
-mod api;
+// mod api;
 
 use exchange::*;
 use interpretor::{Program, ProgramOutput};
@@ -40,9 +40,9 @@ async fn main() {
     reactor.register_exchange(kraken).await;
     match matches.subcommand_name() {
         Some("daemon") => {
-            api::spawn(reactor)
-                .await
-                .expect("Failed to launch api server");
+            //api::spawn(reactor)
+            //    .await
+            //    .expect("Failed to launch api server");
         }
         Some("exec") => {
             let matches = matches.subcommand_matches("exec").unwrap();

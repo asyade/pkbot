@@ -73,10 +73,22 @@ impl ProgramRuntime {
             .arguments();
 
         match program_name.as_str() {
-            "ls" => tokio::spawn(try_builtin(ls::main(reactor.clone(), arguments, stdin, stdout.clone()), stdout)),
-            "cat" => tokio::spawn(try_builtin(cat::main(reactor.clone(), arguments, stdin, stdout.clone()),stdout)),
-            "sleep" => tokio::spawn(try_builtin(sleep::main(reactor.clone(), arguments, stdin, stdout.clone()), stdout)),
-            "echo" => tokio::spawn(try_builtin(echo::main(reactor.clone(), arguments, stdin, stdout.clone()), stdout)),
+            "ls" => tokio::spawn(try_builtin(
+                ls::main(reactor.clone(), arguments, stdin, stdout.clone()),
+                stdout,
+            )),
+            "cat" => tokio::spawn(try_builtin(
+                cat::main(reactor.clone(), arguments, stdin, stdout.clone()),
+                stdout,
+            )),
+            "sleep" => tokio::spawn(try_builtin(
+                sleep::main(reactor.clone(), arguments, stdin, stdout.clone()),
+                stdout,
+            )),
+            "echo" => tokio::spawn(try_builtin(
+                echo::main(reactor.clone(), arguments, stdin, stdout.clone()),
+                stdout,
+            )),
             _ => {
                 let name = program_name.clone();
                 tokio::spawn((async move || {

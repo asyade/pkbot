@@ -68,6 +68,7 @@ impl KrakenExchange {
             };
             map.insert(id, def);
         }
+        log::trace!("Refresh market cache DONE: EXCHANGE={}, NBR_ENTRIES={}", EXCHANGE_NAME, map.len());
         lock.replace(map.clone());
         Ok(())
     }
@@ -83,44 +84,37 @@ impl Exchange for KrakenExchange {
         let server_time = self.client.get_server_time().send().await?;
         Ok(NaiveDateTime::from_timestamp(server_time.unixtime, 0))
     }
-    async fn get_ohlc(&self, id: &MarketIdentifier, mut since: u64) -> Result<OHLCChunk> {
-        let market = if let Some(market) = self
-            .markets_cache
-            .lock()
-            .await
-            .as_ref()
-            .and_then(|e| e.get(id))
-            .map(|e| e.pairname.clone())
-        {
-            market
-        } else {
-            self.refresh_market_cache().await?;
-            self.markets_cache
-                .lock()
-                .await
-                .as_ref()
-                .and_then(|e| e.get(id))
-                .map(|e| e.pairname.clone())
-                .ok_or_else(|| Error::PairNotLoaded)?
-        };
 
+    async fn get_ohlc(
+        &self,
+        id: &MarketIdentifier,
+        mut since: Timestamp,
+        interval: crate::prelude::Interval,
+    ) -> Result<OHLCChunk> {
+        let original_since = since;
+        let market = self.get_market_definition(id, None).await?;
         let mut chunk = Vec::new();
         loop {
+            log::trace!("Request OHLC chunk to external API: EXCHANGE={}, BASE={}, QUOTE={}, SINCE={}, INTERVAL={}", &id.exchange_name, &id.base, &id.quote, since, interval);
             let mut sub_chunk_len = 0;
             let sub_chunk = self
                 .client
-                .get_ohlc_data(market.clone())
-                .interval(Interval::Min1)
-                .since(since)
+                .get_ohlc_data(market.pairname.clone())
+                .interval(interval.into())
+                .since(since as u64)
                 .send()
-                .await?
-                .into_iter()
-                .map(|e| {
-                    since = e.0 as u64;
-                    sub_chunk_len += 1;
-                    super::OHLC::new(e.0, e.1, e.2, e.3, e.4, e.5, e.6, e.7)
-                });
+                .await?;
+            log::trace!("OHLC chunk received from API: EXCHANGE={}, BASE={}, QUOTE={}, SINCE={}, INTERVAL={}, NBR_CANDLES={}", &id.exchange_name, &id.base, &id.quote, since, interval, sub_chunk.len());
+            let sub_chunk = sub_chunk.into_iter().map(|e| {
+                since = e.0;
+                sub_chunk_len += 1;
+                super::OHLC::new(false, e.0, e.1, e.2, e.3, e.4, e.5, e.6, e.7)
+            });
             chunk.extend(sub_chunk);
+            dbg!(original_since, sub_chunk_len);
+            if original_since == 0 && sub_chunk_len > 0 {
+                chunk[0].first_available = true;
+            }
             if sub_chunk_len <= 1 {
                 break;
             }
@@ -129,6 +123,7 @@ impl Exchange for KrakenExchange {
     }
 
     async fn refresh_market_cache(&self) -> Result<()> {
+        log::trace!("Refresh market cache: EXCHANGE={}", EXCHANGE_NAME);
         let lock = self.markets_cache.clone().lock_owned().await;
         Self::refresh_market_cache(lock, &self.client).await?;
         Ok(())
@@ -171,6 +166,22 @@ impl Exchange for KrakenExchange {
             return Ok(markets);
         } else {
             return Err(Error::NoData);
+        }
+    }
+}
+
+impl Into<Interval> for crate::prelude::Interval {
+    fn into(self) -> Interval {
+        match self {
+            crate::prelude::Interval::Min1 => Interval::Min1,
+            crate::prelude::Interval::Min5 => Interval::Min5,
+            crate::prelude::Interval::Min15 => Interval::Min15,
+            crate::prelude::Interval::Min30 => Interval::Min30,
+            crate::prelude::Interval::Hour1 => Interval::Hour1,
+            crate::prelude::Interval::Hour4 => Interval::Hour4,
+            crate::prelude::Interval::Day1 => Interval::Day1,
+            crate::prelude::Interval::Day7 => Interval::Day7,
+            crate::prelude::Interval::Day15 => Interval::Day15,
         }
     }
 }

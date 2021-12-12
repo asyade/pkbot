@@ -20,7 +20,8 @@ pub use std::time::SystemTime;
 pub use tokio::sync::mpsc::{channel, Receiver, Sender};
 pub use tokio::sync::{Mutex, RwLock};
 pub use tokio::task::JoinHandle;
+pub type Timestamp = i64;
 
 pub use crate::error::{Error, Result};
 pub use crate::exchange::{OHLCChunk, OHLC};
-pub use crate::store::{Store, StoreHandle, StoreMarketHandle};
+pub use crate::store::{Interval, Store, StoreHandle, StoreMarketHandle};

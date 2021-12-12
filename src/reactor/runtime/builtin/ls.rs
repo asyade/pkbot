@@ -12,8 +12,6 @@ struct DereferencedLsEntry {
     exchange_name: String,
     quote: String,
     base: String,
-    first_ohlc: Option<i64>,
-    last_ohlc: Option<i64>,
     definition: MarketDefinition,
 }
 
@@ -75,17 +73,6 @@ pub async fn main(
     if app.is_present("definition") {
         let mut ret: Vec<DereferencedLsEntry> = Vec::with_capacity(results.len());
         for market in results {
-            let mut first_ohlc = None;
-            let mut last_ohlc = None;
-            match reactor.get_or_register_market(&market).await {
-                Ok(market) => {
-                    first_ohlc = market.store.first_ohlc().ok().flatten().map(|e| e.time);
-                    last_ohlc = market.store.last_ohlc().ok().flatten().map(|e| e.time);
-                }
-                Err(e) => {
-                    let _ = dbg!(e);
-                }
-            }
             match reactor.exchanges.read().await[&market.exchange_name]
                 .lock()
                 .await
@@ -97,8 +84,6 @@ pub async fn main(
                         exchange_name: market.exchange_name,
                         quote: market.quote,
                         base: market.base,
-                        first_ohlc,
-                        last_ohlc,
                         definition,
                     });
                 }
@@ -107,7 +92,9 @@ pub async fn main(
                 }
             }
         }
-        Ok(ProgramOutput::Json { content: serde_json::to_value(&ret).unwrap_or_else(|_| Value::Null) })
+        Ok(ProgramOutput::Json {
+            content: serde_json::to_value(&ret).unwrap_or_else(|_| Value::Null),
+        })
     } else {
         let results: Vec<_> = results
             .into_iter()

@@ -30,6 +30,8 @@ pub enum Error {
     PairNotLoaded,
     #[error("Parsing error: {0}")]
     Parsing(String, std::ops::Range<usize>),
+    #[error("Wrong interval: {0}")]
+    InvalidInterval(i64),
     #[error("Arguments parsing: {0}")]
     Clap(#[from] clap::Error),
 }

@@ -19,6 +19,6 @@ pub async fn main(
     }
     Ok(ProgramOutput::Exit {
         message: None,
-        status: ProgramStatus::Success
+        status: ProgramStatus::Success,
     })
 }

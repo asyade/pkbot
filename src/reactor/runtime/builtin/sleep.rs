@@ -21,6 +21,6 @@ pub async fn main(
     .await;
     Ok(ProgramOutput::Exit {
         message: None,
-        status: ProgramStatus::Success
+        status: ProgramStatus::Success,
     })
 }

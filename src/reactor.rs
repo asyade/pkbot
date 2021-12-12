@@ -128,12 +128,6 @@ impl Reactor {
                 (market, true)
             }
         };
-        if fresh {
-            let _ = market
-                .sync()
-                .await
-                .map_err(|e| error!("Failed to sync market: {:?}", e));
-        }
         Ok(market)
     }
 }

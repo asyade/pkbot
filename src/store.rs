@@ -46,14 +46,13 @@ impl Store {
 
 impl StoreHandle {
     pub fn market(&self, market: MarketIdentifier) -> Result<StoreMarketHandle> {
-        let uid = market.uid();
+        let uid = market.tree_uid();
         if let Some(exchange) = self.trees.lock().unwrap().get(&uid) {
             return Ok(exchange.clone());
         }
-        let tree = self.db.open_tree(&uid)?;
         self.trees.lock().unwrap().insert(
             uid.clone(),
-            StoreMarketHandle::new(tree, self.settings_tree.clone(), market),
+            StoreMarketHandle::new(self.db.clone(), self.settings_tree.clone(), market),
         );
         Ok(self.trees.lock().unwrap()[&uid].clone())
     }
