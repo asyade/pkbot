@@ -125,11 +125,11 @@ impl CommandAstNode {
             }
         }
         let (root, prev) = Self::parse_one(lexer)?;
-        if let Some(_scope) = scope {
-            inner_parse(lexer, Node::block(root), prev, scope)
-        } else {
+        // if let Some(_scope) = scope {
+            // inner_parse(lexer, Node::block(root), prev, scope)
+        // } else {
             inner_parse(lexer, root.ok_or(Error::NoData)?, prev, scope)
-        }
+        // }
     }
 
     fn parse_closure(lexer: &mut Lexer<Token>) -> Result<(Node, Option<Token>)> {
@@ -138,7 +138,8 @@ impl CommandAstNode {
             Some(Token::GroupClose) => {
                 match (lexer.next(), lexer.next()) {
                     (Some(Token::Fn), Some(Token::BraceOpen)) => {
-                        let scope = Self::parse(lexer, Some(()))?;
+                        let node = Self::parse(lexer, Some(())).map(|e| Some(e)).or_else(|e| if let Error::NoData = e {Ok(None)} else { Err(e) })?;
+                        let scope = Node::block(node);
                         Ok((Node::closure(arguments, scope), None))
                     },
                     _ => Err(Error::Parsing(format!("Expected `=>``"), lexer.span())),
@@ -305,11 +306,12 @@ impl Node {
                     right: Some(right),
                 })))
             }
-            _ => {
+            _e => {
                 Err(Error::Parsing("Expected reference on left side of assignation".to_string(), 0..0))
             }
         }
     }
+
 }
 
 impl CommandAstBody {
