@@ -25,8 +25,13 @@ async fn main() {
         .version("0.1")
         .subcommand(App::new("daemon").about("Launch a reactor deamon"))
         .subcommand(
+            App::new("ast")
+                .about("Print ast of a command")
+                .arg(Arg::new("command").required(true)),
+            )
+        .subcommand(
             App::new("exec")
-                .about("Run a command")
+                .about("Execute a command")
                 .arg(Arg::new("command").required(true)),
         )
         .get_matches();
@@ -43,6 +48,12 @@ async fn main() {
             //api::spawn(reactor)
             //    .await
             //    .expect("Failed to launch api server");
+        }
+        Some("ast") => {
+            let matches = matches.subcommand_matches("ast").unwrap();
+            let command = matches.value_of("command").unwrap();
+            let program = Program::new(command).expect("Failed to parse command");
+            ptree::print_tree(&&program.root).expect("Unable to print directory tree");
         }
         Some("exec") => {
             let matches = matches.subcommand_matches("exec").unwrap();

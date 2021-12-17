@@ -14,25 +14,28 @@ pub struct ProgramRuntime {
 macro_rules! inner_spawn {
     ($reactor:expr => $node:expr, $stdin:expr, $stdout:expr) => {
         match $node.0.content {
-            CommandAstBody::Call { .. } => ProgramRuntime::call($reactor, $node, $stdin, $stdout),
-            CommandAstBody::Pipe if $node.0.left.is_some() && $node.0.right.is_some() => {
-                ProgramRuntime::pipe(
-                    $node.0.left.unwrap(),
-                    $node.0.right.unwrap(),
-                    $reactor,
-                    $stdin,
-                    $stdout,
-                )
-            }
-            CommandAstBody::Separator => {
-                ProgramRuntime::separator($node.0.left, $node.0.right, $reactor, $stdin, $stdout)
-            }
-            CommandAstBody::Pipe => {
-                panic!("Invalide pipe");
-            }
-            CommandAstBody::Arguments { .. } => {
-                panic!("Expected call or pipe, found arguments");
-            }
+            _ => unimplemented!(),
+            //CommandAstBody::Assignation { .. } => unimplemented!(),
+            //CommandAstBody::Literal { .. } => unimplemented!(),
+            //CommandAstBody::Call { .. } => ProgramRuntime::call($reactor, $node, $stdin, $stdout),
+            //CommandAstBody::Pipe if $node.0.left.is_some() && $node.0.right.is_some() => {
+            //    ProgramRuntime::pipe(
+            //        $node.0.left.unwrap(),
+            //        $node.0.right.unwrap(),
+            //        $reactor,
+            //        $stdin,
+            //        $stdout,
+            //    )
+            //}
+            //CommandAstBody::Comma => {
+            //    ProgramRuntime::separator($node.0.left, $node.0.right, $reactor, $stdin, $stdout)
+            //}
+            //CommandAstBody::Pipe => {
+            //    panic!("Invalide pipe");
+            //}
+            //CommandAstBody::Arguments { .. } => {
+            //    panic!("Expected call or pipe, found arguments");
+            //}
         }
     };
 }
@@ -63,47 +66,48 @@ impl ProgramRuntime {
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
     ) -> JoinHandle<()> {
-        let program_name = root.0.content.call_name();
-        let arguments = root
-            .0
-            .left
-            .expect("Expected arguments in left of call node, found None")
-            .0
-            .content
-            .arguments();
+        // let program_name = root.call_name();
+        // let arguments = root
+        //     .0
+        //     .left
+        //     .expect("Expected arguments in left of call node, found None")
+        //     .0
+        //     .content
+        //     .arguments();
 
-        match program_name.as_str() {
-            "ls" => tokio::spawn(try_builtin(
-                ls::main(reactor.clone(), arguments, stdin, stdout.clone()),
-                stdout,
-            )),
-            "cat" => tokio::spawn(try_builtin(
-                cat::main(reactor.clone(), arguments, stdin, stdout.clone()),
-                stdout,
-            )),
-            "sleep" => tokio::spawn(try_builtin(
-                sleep::main(reactor.clone(), arguments, stdin, stdout.clone()),
-                stdout,
-            )),
-            "echo" => tokio::spawn(try_builtin(
-                echo::main(reactor.clone(), arguments, stdin, stdout.clone()),
-                stdout,
-            )),
-            _ => {
-                let name = program_name.clone();
-                tokio::spawn((async move || {
-                    let _ = stdout
-                        .send(ProgramOutput::Exit {
-                            message: Some(format!("Unknown command: {}", &name)),
-                            status: ProgramStatus::Error,
-                        })
-                        .await
-                        .map_err(|e| {
-                            log::error!("Failed to send output of buitlin to stdout: ERROR={}", e)
-                        });
-                })())
-            }
-        }
+        // match program_name.as_str() {
+        //     "ls" => tokio::spawn(try_builtin(
+        //         ls::main(reactor.clone(), arguments, stdin, stdout.clone()),
+        //         stdout,
+        //     )),
+        //     "cat" => tokio::spawn(try_builtin(
+        //         cat::main(reactor.clone(), arguments, stdin, stdout.clone()),
+        //         stdout,
+        //     )),
+        //     "sleep" => tokio::spawn(try_builtin(
+        //         sleep::main(reactor.clone(), arguments, stdin, stdout.clone()),
+        //         stdout,
+        //     )),
+        //     "echo" => tokio::spawn(try_builtin(
+        //         echo::main(reactor.clone(), arguments, stdin, stdout.clone()),
+        //         stdout,
+        //     )),
+        //     _ => {
+        //         let name = program_name.clone();
+        //         tokio::spawn((async move || {
+        //             let _ = stdout
+        //                 .send(ProgramOutput::Exit {
+        //                     message: Some(format!("Unknown command: {}", &name)),
+        //                     status: ProgramStatus::Error,
+        //                 })
+        //                 .await
+        //                 .map_err(|e| {
+        //                     log::error!("Failed to send output of buitlin to stdout: ERROR={}", e)
+        //                 });
+        //         })())
+        //     }
+        // }
+        unimplemented!()
     }
 
     fn pipe(
@@ -113,11 +117,12 @@ impl ProgramRuntime {
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
     ) -> JoinHandle<()> {
-        tokio::spawn((async move || {
-            let (pipline_sender, pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
-            let _left = inner_spawn!(reactor.clone() => left, stdin, pipline_sender);
-            let _ = inner_spawn!(reactor.clone() => right, Some(pipline_receiver), stdout.clone());
-        })())
+        // tokio::spawn((async move || {
+            // let (pipline_sender, pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
+            // let _left = inner_spawn!(reactor.clone() => left, stdin, pipline_sender);
+            // let _ = inner_spawn!(reactor.clone() => right, Some(pipline_receiver), stdout.clone());
+        // })())
+        unimplemented!()
     }
 
     fn separator(
@@ -127,13 +132,14 @@ impl ProgramRuntime {
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
     ) -> JoinHandle<()> {
-        tokio::spawn((async move || {
-            if let Some(left) = left {
-                let _ = tokio::join!(inner_spawn!(reactor.clone() => left, stdin, stdout.clone()));
-            }
-            if let Some(right) = right {
-                let _ = tokio::join!(inner_spawn!(reactor => right, None, stdout.clone()));
-            }
-        })())
+        // tokio::spawn((async move || {
+            // if let Some(left) = left {
+                // let _ = tokio::join!(inner_spawn!(reactor.clone() => left, stdin, stdout.clone()));
+            // }
+            // if let Some(right) = right {
+                // let _ = tokio::join!(inner_spawn!(reactor => right, None, stdout.clone()));
+            // }
+        // })())
+        unimplemented!()
     }
 }

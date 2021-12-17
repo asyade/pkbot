@@ -46,8 +46,9 @@ pub struct Program {
 
 impl Program {
     pub fn new<T: AsRef<str>>(text: T) -> Result<Program> {
+        let root = CommandAstNode::parse(&mut Token::lexer(text.as_ref()), None)?;
         Ok(Program {
-            root: CommandAstNode::parse(Token::lexer(text.as_ref()))?,
+            root,
             status: ProgramStatus::None,
         })
     }

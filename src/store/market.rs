@@ -3,7 +3,7 @@ use super::*;
 macro_rules! try_result_opt {
     ($ivec:expr) => {
         Ok(if let Some(raw) = $ivec? {
-            let decoded = bincode::decode_from_slice(raw.as_ref(), Configuration::standard())?;
+            let (decoded, _) = bincode::decode_from_slice(raw.as_ref(), Configuration::standard())?;
             Some(decoded)
         } else {
             None
@@ -123,10 +123,11 @@ impl StoreMarketHandle {
             .ok()
             .flatten()
         {
-            Ok(bincode::decode_from_slice(
+            let (decoded, _) = bincode::decode_from_slice(
                 raw.as_ref(),
                 Configuration::standard(),
-            )?)
+            )?;
+            Ok(decoded)
         } else {
             let settings = MarketSettings::default();
             self.set_settings(&settings)?;
