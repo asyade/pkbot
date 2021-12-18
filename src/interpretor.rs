@@ -2,6 +2,7 @@ use crate::prelude::*;
 use logos::Logos;
 
 pub mod ast;
+pub mod aggregator;
 mod lexer;
 use ast::*;
 use lexer::*;

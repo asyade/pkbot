@@ -2,72 +2,60 @@ use super::Token;
 use crate::prelude::*;
 use logos::Lexer;
 use ptree::*;
+use super::aggregator::NodeContext;
 
-#[derive(Debug, Clone)]
+#[derive(IsVariant, Debug, Clone, Display)]
 pub enum CommandAstBody {
+    #[display(fmt = "Call")]
     Call,
+    #[display(fmt = "Declare")]
+    Declare,
+    #[display(fmt = "FnArgs")]
     FnArguments,
-    CallArguments,
-    Literal { token: Token, value: String },
-    Ident { span: String },
+    #[display(fmt = "Block")]
     Block,
+    #[display(fmt = "CallArgs")]
+    CallArguments,
+    #[display(fmt = "Literal")]
+    Literal { token: Token, value: String },
+    #[display(fmt = "Ident")]
+    Ident { span: String },
+    #[display(fmt = "Closure")]
     Closure,
+    #[display(fmt = "Assign")]
     Assignation,
+    #[display(fmt = "Pipe")]
     Pipe,
+    #[display(fmt = "Comma")]
     Comma,
 }
 
 #[derive(Debug, Clone)]
 pub struct CommandAstNode {
+    pub meta: NodeContext,
     pub content: CommandAstBody,
     pub left: Option<Node>,
     pub right: Option<Node>,
 }
 
+
 #[derive(Debug, Clone)]
 pub struct Node(pub Box<CommandAstNode>);
 
-impl CommandAstNode {
-    fn parse_one(lexer: &mut Lexer<Token>) -> Result<(Option<Node>, Option<Token>)> {
-        match lexer.next() {
-            None => Ok((None, None)),
-            Some(token) if token.is_literal() => {
-                dbg!(&token);
-                Ok((Some(Node::literal(token, lexer.slice().to_string())), None))
+macro_rules! expected_token {
+    ($what:expr, $after:expr, $found:expr, $lexer:expr) => {
+        match $found {
+            Some(_tok) => {
+                Err(Error::Parsing(format!("Expected {} after {}, found `{}`", $what, $after, $lexer.slice()), $lexer.span()))
             },
-            Some(Token::GroupOpen) => {
-                Self::parse_closure(lexer).map(|(e, r)| (Some(e), r))
-            },
-            Some(Token::BraceOpen) => {
-                let node = Self::parse(lexer, Some(()))?;
-                Ok((Some(node), None))
-            },
-            Some(Token::Ident) => {
-                let (target_node, rest) = Self::parse_ident(lexer)?;
-                let mut node = Node::orphan(CommandAstBody::Call);
-                node.0.right = Some(target_node);
-                match rest.or_else(|| lexer.next()) {
-                    Some(Token::GroupOpen) => {
-                        let (arguments, rest) = Self::parse_arguments(lexer, None, CommandAstBody::CallArguments)?;
-                        match rest {
-                            Some(Token::GroupClose) => {
-                                node.0.left = Some(arguments);
-                                Ok((Some(node), None))
-                            },
-                            Some(_) => Err(Error::Parsing(format!("Expected `)` found `{}`", lexer.slice()), lexer.span())),
-                            None => Err(Error::Parsing(format!("Expected `)``"), lexer.span())),
-                        }
-                    },
-                    rest => {
-                        Ok((Some(node), rest))
-                    },
-                }
-            },
-            r => {
-                Ok((None, r))
+            None => {
+                Err(Error::Parsing(format!("Expected {} after {}", $what, $after), $lexer.span()))
             }
         }
-    }
+    };
+}
+
+impl CommandAstNode {
 
     pub fn parse(lexer: &mut Lexer<Token>, scope: Option<()>) -> Result<Node> {
         pub fn inner_parse(
@@ -132,6 +120,66 @@ impl CommandAstNode {
         // }
     }
 
+    fn parse_one(lexer: &mut Lexer<Token>) -> Result<(Option<Node>, Option<Token>)> {
+        match lexer.next() {
+            None => Ok((None, None)),
+            Some(token) if token.is_literal() => {
+                dbg!(&token);
+                Ok((Some(Node::literal(token, lexer.slice().to_string())), None))
+            },
+            Some(Token::GroupOpen) => {
+                Self::parse_closure(lexer).map(|(e, r)| (Some(e), r))
+            },
+            Some(Token::BraceOpen) => {
+                let node = Self::parse(lexer, Some(()))?;
+                Ok((Some(node), None))
+            },
+            Some(Token::Keyword) => match lexer.slice() {
+                "let" => {
+                    match lexer.next() {
+                        Some(tok) if tok.is_ident() => {
+                            let (ident, rest) = Self::parse_ident(lexer)?;
+                            match rest.or_else(|| lexer.next()) {
+                                Some(token) if token.is_assign() || token.is_comma() => {
+                                    Ok((Some(Node::declare(ident)), Some(token)))
+                                },
+                                e => expected_token!("identifier", "let keyword", e, lexer),
+                            }
+                        },
+                        e => expected_token!("identifier", "let keyword", e, lexer),
+                    }
+                }
+                _ => {
+                    Err(Error::Parsing(format!("Unexpected identifier `{}`", lexer.slice()), lexer.span()))
+                }
+            }
+            Some(Token::Ident) => {
+                
+                let (target_node, rest) = Self::parse_ident(lexer)?;
+                let mut node = Node::orphan(CommandAstBody::Call);
+                node.0.right = Some(target_node);
+                match rest.or_else(|| lexer.next()) {
+                    Some(Token::GroupOpen) => {
+                        let (arguments, rest) = Self::parse_arguments(lexer, None, CommandAstBody::CallArguments)?;
+                        match rest {
+                            Some(Token::GroupClose) => {
+                                node.0.left = Some(arguments);
+                                Ok((Some(node), None))
+                            },
+                            e => expected_token!("`)`", "call", e, lexer),
+                        }
+                    },
+                    rest => {
+                        Ok((Some(node), rest))
+                    },
+                }
+            },
+            r => {
+                Ok((None, r))
+            }
+        }
+    }
+
     fn parse_closure(lexer: &mut Lexer<Token>) -> Result<(Node, Option<Token>)> {
         let (arguments, rest) = Self::parse_arguments(lexer, None, CommandAstBody::FnArguments)?;
         match rest {
@@ -145,8 +193,7 @@ impl CommandAstNode {
                     _ => Err(Error::Parsing(format!("Expected `=>``"), lexer.span())),
                 }
             },
-            Some(_) => Err(Error::Parsing(format!("Expected `)` found `{}`", lexer.slice()), lexer.span())),
-            None => Err(Error::Parsing(format!("Expected `)``"), lexer.span())),
+            e => expected_token!("`)`", "closure arguments list", e, lexer),
         }
     }
 
@@ -227,24 +274,29 @@ impl Node {
     fn orphan(content: CommandAstBody) -> Node {
         Node(Box::new(CommandAstNode {
             content,
-            left: None,
-            right: None,
+            ..Default::default()
+        }))
+    }
+
+    fn declare(ident: Node) -> Node {
+        Node(Box::new(CommandAstNode {
+            content: CommandAstBody::Declare,
+            left: Some(ident),
+            ..Default::default()
         }))
     }
 
     fn literal(token: Token, value: String) -> Node {
         Node(Box::new(CommandAstNode {
             content: CommandAstBody::Literal{ token, value },
-            left: None,
-            right: None,
+            ..Default::default()
         }))
     }
 
     fn ident(span: String) -> Node {
         Node(Box::new(CommandAstNode {
             content: CommandAstBody::Ident { span },
-            left: None,
-            right: None,
+            ..Default::default()
         }))
     }
 
@@ -269,6 +321,7 @@ impl Node {
             content: CommandAstBody::Closure,
             left: Some(arguments),
             right: Some(body),
+            ..Default::default()
         }))
     }
 
@@ -277,6 +330,7 @@ impl Node {
             content: CommandAstBody::Pipe,
             left: Some(left),
             right: Some(right),
+            ..Default::default()
         }))
     }
 
@@ -284,7 +338,7 @@ impl Node {
         Node(Box::new(CommandAstNode {
             content: CommandAstBody::Block,
             left: body,
-            right: None,
+            ..Default::default()
         }))
     }
 
@@ -294,16 +348,26 @@ impl Node {
             content: CommandAstBody::Comma,
             left: left,
             right: right,
+            ..Default::default()
         }))
     }
 
     fn assignation(left: Node, right: Node) -> Result<Self> {
-        match (left.0.content, left.0.right.as_ref().map(|e| &e.0.content)) {
+        match (&left.0.content, left.0.right.as_ref().map(|e| &e.0.content)) {
+            (CommandAstBody::Declare, _) => {
+                Ok(Node(Box::new(CommandAstNode {
+                    content: CommandAstBody::Assignation,
+                    left: Some(left),
+                    right: Some(right),
+                    ..Default::default()
+                })))
+            },
             (CommandAstBody::Call, Some(CommandAstBody::Ident{ .. })) if left.0.left.is_none() => {
                 Ok(Node(Box::new(CommandAstNode {
                     content: CommandAstBody::Assignation,
                     left: left.0.right,
                     right: Some(right),
+                    ..Default::default()
                 })))
             }
             _e => {
@@ -314,30 +378,15 @@ impl Node {
 
 }
 
-impl CommandAstBody {
-    pub fn is_call(&self) -> bool {
-        if let CommandAstBody::Call = self {
-            true
-        } else {
-            false
-        }
-    }
-}
 
-impl std::fmt::Display for CommandAstBody {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(fmt, "{}", match self {
-            CommandAstBody::Call => "Call",
-            CommandAstBody::FnArguments => "FnArgs",
-            CommandAstBody::Block => "Block",
-            CommandAstBody::CallArguments => "CallArgs",
-            CommandAstBody::Literal { .. } => "Literal",
-            CommandAstBody::Ident { .. } => "Ident",
-            CommandAstBody::Closure => "Closure",
-            CommandAstBody::Assignation => "Assign",
-            CommandAstBody::Pipe => "Pipe",
-            CommandAstBody::Comma => "Comma",        
-        })
+impl Default for CommandAstNode {
+    fn default() -> Self {
+        CommandAstNode {
+            content: CommandAstBody::Block,
+            meta: NodeContext::undeterminated(),
+            left: None,
+            right: None,
+        }
     }
 }
 

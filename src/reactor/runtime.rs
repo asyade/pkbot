@@ -8,22 +8,20 @@ const CHANN_SIZE_MAIN: usize = 2048;
 
 pub struct Scope {
     kind: ScopeKind,
+    parent: Option<Box<Scope>>,
     stack: HashMap<String, RuntimeValue>,
 }
+
+pub type SyncScope = Arc<RwLock<Scope>>;
 
 impl Scope {
     pub fn new(kind: ScopeKind) -> Self {
         Self {
             kind,
             stack: HashMap::new(),
+            parent: None,
         }
     }
-}
-
-pub struct SyncScope(Arc<RwLock<Scope>>);
-
-impl SyncScope {
-
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -48,9 +46,9 @@ pub struct ProgramRuntime {
 }
 
 macro_rules! inner_spawn {
-    ($reactor:expr => $node:expr, $stdin:expr, $stdout:expr) => {
+    ($reactor:expr => $node:expr, $stdin:expr, $stdout:expr, $scope:expr) => {
         match $node.0.content {
-            CommandAstBody::Call { .. } => ProgramRuntime::call($reactor, $node, $stdin, $stdout),
+            CommandAstBody::Call { .. } => ProgramRuntime::call($reactor, $node, $stdin, $stdout, $scope),
             // CommandAstBody::Assignation { .. } => unimplemented!(),
             //CommandAstBody::Literal { .. } => unimplemented!(),
             //CommandAstBody::Pipe if $node.0.left.is_some() && $node.0.right.is_some() => {
@@ -80,12 +78,12 @@ impl ProgramRuntime {
     pub async fn spawn(root: Node, reactor: Reactor) -> ProgramRuntime {
         let (main_sender, main_receiver) = channel(CHANN_SIZE_MAIN);
         let id = reactor.process_counter.fetch_add(1, Ordering::SeqCst);
-
-        Self::inner_spawn(root, reactor, None, main_sender).await;
+        let global_scope = Scope::new(ScopeKind::Global);
+        Self::inner_spawn(root, reactor, None, main_sender, &global_scope).await;
         ProgramRuntime {
             id,
             stdout: Some(main_receiver),
-            global: Scope::new(ScopeKind::Global),
+            global: global_scope,
         }
     }
 
@@ -94,8 +92,9 @@ impl ProgramRuntime {
         reactor: Reactor,
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
+        scope: &Scope,
     ) -> JoinHandle<()> {
-        inner_spawn!(reactor => root, stdin, stdout)
+        inner_spawn!(reactor => root, stdin, stdout, &scope)
     }
 
     fn call(
@@ -103,6 +102,7 @@ impl ProgramRuntime {
         root: Node,
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
+        scope: &Scope,
     ) -> JoinHandle<()> {
         unimplemented!()
         //let program_name = root.call_name();

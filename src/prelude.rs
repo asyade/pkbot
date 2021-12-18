@@ -23,8 +23,8 @@ pub use tokio::task::JoinHandle;
 pub type Timestamp = i64;
 pub use std::env;
 pub use std::borrow::Cow;
-
-
+pub use derive_more::*;
+pub use std::default::Default;
 
 pub use crate::error::{Error, Result};
 pub use crate::exchange::{OHLCChunk, OHLC};
