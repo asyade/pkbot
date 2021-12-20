@@ -144,8 +144,8 @@ impl ProgramRuntime {
                     }
                 },
                 RuntimeValue::Procedure(node) => {
-                    if let Some(right) = node.0.right.as_ref().unwrap().0.right.clone() {
-                        dbg!(&right);
+                    dbg!(&node);
+                    if let Some(right) = node.0.right.as_ref().unwrap().0.left.clone() {
                         drop(lock);
                         let fut = inner_spawn!(reactor => right, stdin, stdout, ctx);
                         let _ = fut.await;
