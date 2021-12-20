@@ -389,6 +389,13 @@ impl Node {
             _ => panic!("Not an identifier"),
         }
     }
+
+    pub fn reference(&'_ self) -> (&'_ str, Reference) {
+        match &self.0.content {
+            CommandAstBody::Ident { span } => (&span, self.0.meta.reference_to.expect("Dangling identifier")),
+            _ => panic!("Not an identifier"),
+        }
+    }
 }
 
 impl Default for CommandAstNode {
@@ -409,21 +416,20 @@ impl<'a> TreeItem for &'a Node {
         match &self.0.meta {
             NodeContext {
                 scoop,
-                reference_to: Some(reference_to),    
+                reference_to: Some(reference_to),
             } => write!(
                 f,
                 "{}",
-                style.paint(format!("{} ({} -> {})", &self.0.content, scoop, reference_to))
+                style.paint(format!(
+                    "{} ({} -> {})",
+                    &self.0.content, scoop, reference_to
+                ))
             ),
-            NodeContext {
-                scoop,
-                ..
-            } => write!(
+            NodeContext { scoop, .. } => write!(
                 f,
                 "{}",
                 style.paint(format!("{} ({})", &self.0.content, scoop))
-            )
-    
+            ),
         }
     }
 

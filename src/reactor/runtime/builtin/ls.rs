@@ -103,3 +103,12 @@ pub async fn main(
         Ok(ProgramOutput::json(&results)?)
     }
 }
+
+pub fn wrap() -> NativeProcedureGen {
+    Box::new(
+        |reactor: Reactor,
+         args: Vec<String>,
+         stdin: Option<Receiver<ProgramOutput>>,
+         stdout: Sender<ProgramOutput>| { Box::pin(main(reactor, args, stdin, stdout)) },
+    )
+}

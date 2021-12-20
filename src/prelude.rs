@@ -21,11 +21,12 @@ pub use tokio::sync::mpsc::{channel, Receiver, Sender};
 pub use tokio::sync::{Mutex, RwLock};
 pub use tokio::task::JoinHandle;
 pub type Timestamp = i64;
+pub use crate::error::{Error, Result};
+pub use crate::exchange::{OHLCChunk, OHLC};
+pub use crate::interpretor::aggregator::*;
+pub use crate::store::{Interval, Store, StoreHandle, StoreMarketHandle};
 pub use derive_more::*;
 pub use std::borrow::Cow;
 pub use std::default::Default;
 pub use std::env;
-
-pub use crate::error::{Error, Result};
-pub use crate::exchange::{OHLCChunk, OHLC};
-pub use crate::store::{Interval, Store, StoreHandle, StoreMarketHandle};
+pub use std::pin::Pin;

@@ -3,19 +3,15 @@ use std::collections::HashSet;
 
 use super::ast::*;
 use super::lexer::*;
+use super::ProgramOutput;
 use crate::prelude::*;
 
 #[derive(Debug)]
 pub struct AstContext {
     scoop_counter: usize,
     declaration_counter: usize,
-    memory: BTreeMap<Reference, ContextCell>,
+    memory: BTreeMap<Reference, RuntimeValue>,
     scoops: BTreeMap<ScoopID, NodeScoop>,
-}
-
-#[derive(Debug)]
-pub struct ContextCell {
-    data: RuntimeValue,
 }
 
 #[derive(Debug, Clone)]
@@ -31,21 +27,45 @@ pub struct NodeContext {
     pub reference_to: Option<ScoopID>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum RuntimeValue {
     Number(f64),
     String(String),
     Object(HashMap<String, RuntimeValue>),
     Array(Vec<RuntimeValue>),
-    Closure(Node),
+    Procedure(Node),
+    NativeProcedure(Arc<Mutex<NativeProcedureGen>>),
 }
+
+impl std::fmt::Debug for RuntimeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            RuntimeValue::Number(payload) => write!(f, "{:?}", payload),
+            RuntimeValue::String(payload) => write!(f, "{:?}", payload),
+            RuntimeValue::Object(payload) => write!(f, "{:?}", payload),
+            RuntimeValue::Array(payload) => write!(f, "{:?}", payload),
+            RuntimeValue::Procedure(payload) => write!(f, "{:?}", payload),
+            RuntimeValue::NativeProcedure(_payload) => write!(f, "[native]")
+        }
+    }
+}
+
+pub type NativeProcedureGen = Box<
+    dyn (Fn(
+            Reactor,
+            Vec<String>,
+            Option<Receiver<ProgramOutput>>,
+            Sender<ProgramOutput>,
+        ) -> NativeProcedure)
+        + Send,
+>;
+pub type NativeProcedure = Pin<Box<dyn Future<Output = Result<ProgramOutput>> + Send>>;
 
 pub type Reference = usize;
 pub type ScoopID = usize;
 
-
 impl AstContext {
-    pub fn new(root: &mut Node) -> Self {
+    pub fn new<F: (FnOnce(&mut Self))>(root: &mut Node, init: F) -> Self {
         let mut context = Self {
             declaration_counter: 0,
             scoop_counter: 0,
@@ -53,9 +73,50 @@ impl AstContext {
             scoops: BTreeMap::new(),
         };
         let main_scoop = context.create_scoop(None);
-        context.aggregate_scoop(root, main_scoop).expect("Failed to aggregate");
+        context
+            .aggregate_scoop(root, main_scoop)
+            .expect("Failed to aggregate");
+
+        (init)(&mut context);
+
         context.aggregate_deps(root).expect("Failed to aggregate");
         context
+    }
+
+    pub fn scoop_set(
+        &mut self,
+        scoop: ScoopID,
+        label: String,
+        value: RuntimeValue,
+    ) -> Result<Reference> {
+        let reference = self.new_ref();
+        let scoop = self
+            .scoops
+            .get_mut(&scoop)
+            .ok_or_else(|| Error::ScoopNotFound(scoop))?;
+        scoop.owned_references.insert(label, reference);
+        self.memory_set(reference, value);
+        Ok(reference)
+    }
+
+    pub fn scoop_get(&self, scoop: ScoopID, label: &str) -> Option<&'_ RuntimeValue> {
+        self.memory_get(*self.scoops.get(&scoop)?.owned_references.get(label)?)
+    }
+
+    pub fn scoop_get_mut(&mut self, scoop: ScoopID, label: &str) -> Option<&'_ mut RuntimeValue> {
+        self.memory_get_mut(*self.scoops.get(&scoop)?.owned_references.get(label)?)
+    }
+
+    pub fn memory_set(&mut self, reference: Reference, value: RuntimeValue) {
+        let _ = self.memory.insert(reference, value);
+    }
+
+    pub fn memory_get(&'_ self, reference: Reference) -> Option<&'_ RuntimeValue> {
+        self.memory.get(&reference)
+    }
+
+    pub fn memory_get_mut(&'_ mut self, reference: Reference) -> Option<&'_ mut RuntimeValue> {
+        self.memory.get_mut(&reference)
     }
 
     fn create_scoop(&mut self, parent: Option<ScoopID>) -> ScoopID {
@@ -123,7 +184,7 @@ impl AstContext {
             | CommandAstBody::Comma
             | CommandAstBody::Pipe => {
                 if let Some(left) = node.0.left.as_mut() {
-                    self.aggregate_deps(left,)?;
+                    self.aggregate_deps(left)?;
                 }
                 if let Some(right) = node.0.right.as_mut() {
                     self.aggregate_deps(right)?;
@@ -168,7 +229,6 @@ impl AstContext {
         }
     }
 
-
     fn aggregate_reference(&mut self, node: &mut Node) -> Result<()> {
         let mut parent_scoop = node.0.meta.scoop;
         let span = node.span();
@@ -176,13 +236,13 @@ impl AstContext {
             let parent = &self.scoops[&parent_scoop];
             if parent.owned_references.contains_key(span) {
                 node.0.meta.reference_to = Some(parent_scoop);
-                return Ok(())
+                return Ok(());
             }
 
             if let Some(super_parent) = parent.parent {
                 parent_scoop = super_parent;
             } else {
-                return Err(Error::ReferenceNotFound(span.to_string()))
+                return Err(Error::ReferenceNotFound(span.to_string()));
                 // return Err(unimplemented!())
             }
         }
@@ -201,6 +261,15 @@ impl NodeScoop {
 
 impl NodeContext {
     pub fn undeterminated() -> Self {
-        Self { scoop: 1, reference_to: None }
+        Self {
+            scoop: 1,
+            reference_to: None,
+        }
+    }
+}
+
+impl RuntimeValue {
+    pub fn binding(generator: NativeProcedureGen) -> Self {
+        Self::NativeProcedure(Arc::new(Mutex::new(generator)))
     }
 }

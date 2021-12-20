@@ -1,4 +1,4 @@
-#![feature(async_closure)]
+#![feature(async_closure, type_alias_impl_trait)]
 use clap::{App, Arg};
 
 pub(crate) mod error;

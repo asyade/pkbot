@@ -32,6 +32,8 @@ pub enum Error {
     Parsing(String, std::ops::Range<usize>),
     #[error("Reference not found: `{0}`")]
     ReferenceNotFound(String),
+    #[error("The referenced scoop not exist: `{0}`")]
+    ScoopNotFound(usize),
     #[error("{0}")]
     ParseInt(#[from] std::num::ParseIntError),
     #[error("Wrong interval: {0}")]
