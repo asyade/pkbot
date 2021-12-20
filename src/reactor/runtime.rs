@@ -26,7 +26,7 @@ macro_rules! inner_spawn {
             CommandAstBody::Assignation { .. } => {
                 ProgramRuntime::assignation($reactor, $node, $stdin, $stdout, $context)
             }
-            //CommandAstBody::Literal { .. } => unimplemented!(),
+            CommandAstBody::Literal { .. } => unimplemented!(),
             //CommandAstBody::Pipe if $node.0.left.is_some() && $node.0.right.is_some() => {
             //    ProgramRuntime::pipe(
             //        $node.0.left.unwrap(),
@@ -86,30 +86,39 @@ impl ProgramRuntime {
         context: SyncContext,
     ) -> JoinHandle<()> {
         tokio::spawn((async move || {
+
+
             let (pipline_sender, mut pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
             let left = root.0.left.expect("Left operand");
             let call = root.0.right.expect("Right operand"); 
-            let handle = inner_spawn!(reactor => call, stdin, pipline_sender, context.clone());
-            let mut values = Vec::with_capacity(1);
-            while let Some(res) = pipline_receiver.recv().await {
-                match res {
-                    ProgramOutput::Json { content } => values.push(content),
-                    _ => {}, 
+
+            if call.0.content.is_closure() {
+                let (target_name, target_scoop) = left.reference();
+                if let Err(e) = context.write().await.scoop_set(target_scoop, target_name.to_string(), RuntimeValue::Procedure(call)) {
+                    dbg!(e);
                 }
-            }
-            let _ = handle.await;
-            drop(stdout);
-            let value = if values.len() > 0 {
-                RuntimeValue::Array(values)
-            } else if values.len() == 1 {
-                values.remove(0)
             } else {
-                RuntimeValue::Undefined
-            };
-            dbg!(&left);
-            let (target_name, target_scoop) = left.reference();
-            if let Err(e) = context.write().await.scoop_set(target_scoop, target_name.to_string(), value) {
-                dbg!(e);
+                let handle = inner_spawn!(reactor => call, stdin, pipline_sender, context.clone());
+                let mut values = Vec::with_capacity(1);
+                while let Some(res) = pipline_receiver.recv().await {
+                    match res {
+                        ProgramOutput::Json { content } => values.push(content),
+                        _ => {}, 
+                    }
+                }
+                let _ = handle.await;
+                drop(stdout);
+                let value = if values.len() > 0 {
+                    RuntimeValue::Array(values)
+                } else if values.len() == 1 {
+                    values.remove(0)
+                } else {
+                    RuntimeValue::Undefined
+                };
+                let (target_name, target_scoop) = left.reference();
+                if let Err(e) = context.write().await.scoop_set(target_scoop, target_name.to_string(), value) {
+                    dbg!(e);
+                }
             }
         })())
     }
@@ -123,6 +132,7 @@ impl ProgramRuntime {
     ) -> JoinHandle<()> {
         tokio::spawn((async move || { 
             let (name, scoop) = root.0.right.as_ref().unwrap().reference();
+            let ctx = context.clone();
             let lock = context.read().await;
             let value = lock.scoop_get(scoop, name).unwrap();
             match value {
@@ -133,50 +143,17 @@ impl ProgramRuntime {
                         let _ = stdout.send(res).await;
                     }
                 },
+                RuntimeValue::Procedure(node) => {
+                    if let Some(right) = node.0.right.as_ref().unwrap().0.right.clone() {
+                        dbg!(&right);
+                        drop(lock);
+                        let fut = inner_spawn!(reactor => right, stdin, stdout, ctx);
+                        let _ = fut.await;
+                    }
+                },
                 _ => unimplemented!()
             }
         })())
-        //let program_name = root.call_name();
-        //let arguments = root
-        //    .0
-        //    .left
-        //    .expect("Expected arguments in left of call node, found None")
-        //    .0
-        //    .content
-        //    .arguments();
-        //
-        //match program_name.as_str() {
-        //    "ls" => tokio::spawn(try_builtin(
-        //        ls::main(reactor.clone(), arguments, stdin, stdout.clone()),
-        //        stdout,
-        //    )),
-        //    "cat" => tokio::spawn(try_builtin(
-        //        cat::main(reactor.clone(), arguments, stdin, stdout.clone()),
-        //        stdout,
-        //    )),
-        //    "sleep" => tokio::spawn(try_builtin(
-        //        sleep::main(reactor.clone(), arguments, stdin, stdout.clone()),
-        //        stdout,
-        //    )),
-        //    "echo" => tokio::spawn(try_builtin(
-        //        echo::main(reactor.clone(), arguments, stdin, stdout.clone()),
-        //        stdout,
-        //    )),
-        //    _ => {
-        //        let name = program_name.clone();
-        //        tokio::spawn((async move || {
-        //            let _ = stdout
-        //                .send(ProgramOutput::Exit {
-        //                    message: Some(format!("Unknown command: {}", &name)),
-        //                    status: ProgramStatus::Error,
-        //                })
-        //                .await
-        //                .map_err(|e| {
-        //                    log::error!("Failed to send output of buitlin to stdout: ERROR={}", e)
-        //                });
-        //        })())
-        //    }
-        //}
     }
 
     fn pipe(
