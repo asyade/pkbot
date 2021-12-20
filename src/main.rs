@@ -83,9 +83,8 @@ async fn main() {
                         ..
                     } => {
                         println!(
-                            "{}",
-                            serde_json::to_string_pretty(&content)
-                                .unwrap_or(String::from("Failed to prettify"))
+                            "{:?}",
+                            &content
                         );
                     }
                     ReactorEvent::RuntimeCreated { .. } => {}

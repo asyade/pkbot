@@ -92,15 +92,16 @@ pub async fn main(
                 }
             }
         }
-        Ok(ProgramOutput::Json {
-            content: serde_json::to_value(&ret).unwrap_or_else(|_| Value::Null),
-        })
+        // Ok(ProgramOutput::Json {
+            // content: serde_json::to_value(&ret).unwrap_or_else(|_| Value::Null),
+        // })
+        Ok(unimplemented!())
     } else {
         let results: Vec<_> = results
             .into_iter()
-            .map(|e| format!("{}/{}/{}", e.exchange_name, e.base, e.quote))
+            .map(|e| RuntimeValue::from(format!("{}/{}/{}", e.exchange_name, e.base, e.quote).as_str()))
             .collect();
-        Ok(ProgramOutput::json(&results)?)
+        Ok(ProgramOutput::json(RuntimeValue::from(results)))
     }
 }
 

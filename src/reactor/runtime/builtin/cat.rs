@@ -64,5 +64,6 @@ pub async fn main(
             .close_range(from, to)?;
         results.push(chunk);
     }
-    Ok(ProgramOutput::json(&results)?)
+    Ok(unimplemented!())
+    // Ok(ProgramOutput::json(&results)?)
 }

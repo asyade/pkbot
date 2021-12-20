@@ -12,7 +12,7 @@ use self::runtime::ProgramRuntime;
 
 pub type ListenerIdentifier = u64;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum ReactorEvent {
     ProgramOutput {
         id: ProgramIdentifier,

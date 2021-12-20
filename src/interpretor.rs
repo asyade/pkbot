@@ -9,7 +9,7 @@ use lexer::*;
 
 use self::aggregator::AstContext;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum ProgramOutput {
     Exit {
         message: Option<String>,
@@ -19,15 +19,15 @@ pub enum ProgramOutput {
         message: String,
     },
     Json {
-        content: Value,
+        content: RuntimeValue,
     },
 }
 
 impl ProgramOutput {
-    pub fn json<T: Serialize>(ser: T) -> Result<Self> {
-        Ok(ProgramOutput::Json {
-            content: serde_json::to_value(ser)?,
-        })
+    pub fn json(ser: RuntimeValue) -> Self {
+        ProgramOutput::Json {
+            content: ser,
+        }
     }
 }
 

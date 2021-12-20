@@ -83,7 +83,16 @@ impl ProgramRuntime {
         stdout: Sender<ProgramOutput>,
         context: SyncContext,
     ) -> JoinHandle<()> {
-        tokio::spawn((async || {})())
+        tokio::spawn((async || {
+            let (pipline_sender, mut pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
+            let call = root.0.right.expect("Right operand");
+            let handle = inner_spawn!(reactor => call, stdin, pipline_sender, context);
+            while let Some(res) = pipline_receiver.recv().await {
+                dbg!(res);
+            }
+            handle.await;
+            drop(stdout);
+        })())
     }
 
     fn call(

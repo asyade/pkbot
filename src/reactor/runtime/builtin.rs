@@ -44,6 +44,55 @@ macro_rules! buitlin_result {
             .map_err(|e| log::error!("Failed to send output of buitlin to stdout: ERROR={}", e));
     }};
 }
+ 
+#[macro_export]
+macro_rules! runtime_value {
+    {$($k:literal : $v:expr,)*} => {{
+        let mut map: std::collections::BTreeMap<String, RuntimeValue> = std::collections::BTreeMap::new();
+        map = [ $(($k.to_string(), runtime_value!($v))),* ].into_iter().collect();
+        map
+    }};
+    ($value:expr) => {
+        RuntimeValue::from($value)
+    }
+}
+
+impl From<&str> for RuntimeValue {
+    fn from(val: &str) -> Self {
+        RuntimeValue::String(val.to_string())
+    }
+}
+
+
+impl From<i32> for RuntimeValue {
+    fn from(val: i32) -> Self {
+        RuntimeValue::Number(val as f64)
+    }
+}
+
+impl From<u32> for RuntimeValue {
+    fn from(val: u32) -> Self {
+        RuntimeValue::Number(val as f64)
+    }
+}
+
+impl From<f32> for RuntimeValue {
+    fn from(val: f32) -> Self {
+        RuntimeValue::Number(val as f64)
+    }
+}
+
+impl From<f64> for RuntimeValue {
+    fn from(val: f64) -> Self {
+        RuntimeValue::Number(val)
+    }
+}
+
+impl  From<Vec<RuntimeValue>> for RuntimeValue {
+    fn from(val: Vec<RuntimeValue>) -> Self {
+        RuntimeValue::Array(val)
+    }
+}
 
 pub mod cat;
 pub mod echo;

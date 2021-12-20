@@ -31,7 +31,7 @@ pub struct NodeContext {
 pub enum RuntimeValue {
     Number(f64),
     String(String),
-    Object(HashMap<String, RuntimeValue>),
+    Object(BTreeMap<String, RuntimeValue>),
     Array(Vec<RuntimeValue>),
     Procedure(Node),
     NativeProcedure(Arc<Mutex<NativeProcedureGen>>),
