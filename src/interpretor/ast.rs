@@ -393,7 +393,8 @@ impl Node {
     pub fn reference(&'_ self) -> (&'_ str, Reference) {
         match &self.0.content {
             CommandAstBody::Ident { span } => (&span, self.0.meta.reference_to.expect("Dangling identifier")),
-            _ => panic!("Not an identifier"),
+            CommandAstBody::Declare => self.0.left.as_ref().unwrap().reference(),
+            _ => panic!("Not an reference"),
         }
     }
 }

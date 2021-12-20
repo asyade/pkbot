@@ -6,6 +6,7 @@ use crate::interpretor::{
 };
 use crate::prelude::*;
 pub use builtin::*;
+
 pub type SyncContext = Arc<RwLock<AstContext>>;
 
 const CHANN_SIZE_PIPLINE: usize = 512;
@@ -76,6 +77,7 @@ impl ProgramRuntime {
         inner_spawn!(reactor => root, stdin, stdout, context)
     }
 
+    //TODO: optime
     fn assignation(
         reactor: Reactor,
         root: Node,
@@ -83,15 +85,32 @@ impl ProgramRuntime {
         stdout: Sender<ProgramOutput>,
         context: SyncContext,
     ) -> JoinHandle<()> {
-        tokio::spawn((async || {
+        tokio::spawn((async move || {
             let (pipline_sender, mut pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
-            let call = root.0.right.expect("Right operand");
-            let handle = inner_spawn!(reactor => call, stdin, pipline_sender, context);
+            let left = root.0.left.expect("Left operand");
+            let call = root.0.right.expect("Right operand"); 
+            let handle = inner_spawn!(reactor => call, stdin, pipline_sender, context.clone());
+            let mut values = Vec::with_capacity(1);
             while let Some(res) = pipline_receiver.recv().await {
-                dbg!(res);
+                match res {
+                    ProgramOutput::Json { content } => values.push(content),
+                    _ => {}, 
+                }
             }
-            handle.await;
+            let _ = handle.await;
             drop(stdout);
+            let value = if values.len() > 0 {
+                RuntimeValue::Array(values)
+            } else if values.len() == 1 {
+                values.remove(0)
+            } else {
+                RuntimeValue::Undefined
+            };
+            dbg!(&left);
+            let (target_name, target_scoop) = left.reference();
+            if let Err(e) = context.write().await.scoop_set(target_scoop, target_name.to_string(), value) {
+                dbg!(e);
+            }
         })())
     }
 
@@ -108,9 +127,11 @@ impl ProgramRuntime {
             let value = lock.scoop_get(scoop, name).unwrap();
             match value {
                 RuntimeValue::NativeProcedure(gen) => {
-                    let fut = (gen.lock().await)(reactor, vec![], stdin, stdout);
+                    let fut = (gen.lock().await)(reactor, vec![], stdin, stdout.clone());
                     drop(lock);
-                    dbg!(fut.await);
+                    if let Ok(res) = fut.await {
+                        let _ = stdout.send(res).await;
+                    }
                 },
                 _ => unimplemented!()
             }

@@ -63,7 +63,6 @@ impl From<&str> for RuntimeValue {
     }
 }
 
-
 impl From<i32> for RuntimeValue {
     fn from(val: i32) -> Self {
         RuntimeValue::Number(val as f64)

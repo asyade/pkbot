@@ -29,6 +29,7 @@ pub struct NodeContext {
 
 #[derive(Clone)]
 pub enum RuntimeValue {
+    Undefined,
     Number(f64),
     String(String),
     Object(BTreeMap<String, RuntimeValue>),
@@ -40,6 +41,7 @@ pub enum RuntimeValue {
 impl std::fmt::Debug for RuntimeValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
+            RuntimeValue::Undefined => write!(f, "Undefined"),
             RuntimeValue::Number(payload) => write!(f, "{:?}", payload),
             RuntimeValue::String(payload) => write!(f, "{:?}", payload),
             RuntimeValue::Object(payload) => write!(f, "{:?}", payload),
@@ -109,6 +111,7 @@ impl AstContext {
 
     pub fn memory_set(&mut self, reference: Reference, value: RuntimeValue) {
         let _ = self.memory.insert(reference, value);
+        dbg!(&self.memory);
     }
 
     pub fn memory_get(&'_ self, reference: Reference) -> Option<&'_ RuntimeValue> {
@@ -215,14 +218,16 @@ impl AstContext {
             }
             CommandAstBody::Declare => {
                 let reference = self.new_ref();
-                let name = node.0.left.as_ref().unwrap().span().to_string();
+                let left = node.0.left.as_mut().unwrap();
+                let name = left.span().to_string();
+                left.0.meta.reference_to = Some(node.0.meta.scoop);
                 self.scoops
                     .get_mut(&node.0.meta.scoop)
                     .expect("Parent scoop")
                     .owned_references
                     .insert(name, reference);
-                if let Some(left) = node.0.left.as_mut() {
-                    self.aggregate_deps(left)?;
+                if let Some(right) = node.0.right.as_mut() {
+                    self.aggregate_deps(right)?;
                 }
                 Ok(())
             }
