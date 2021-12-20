@@ -88,7 +88,7 @@ impl AstContext {
     pub fn scoop_set(
         &mut self,
         scoop: ScoopID,
-        label: String,
+        label: &str,
         value: RuntimeValue,
     ) -> Result<Reference> {
         let reference = self.new_ref();
@@ -96,9 +96,15 @@ impl AstContext {
             .scoops
             .get_mut(&scoop)
             .ok_or_else(|| Error::ScoopNotFound(scoop))?;
-        scoop.owned_references.insert(label, reference);
+        let reference =  if let Some(reference) = scoop.owned_references.get(label) {
+            *reference
+        } else {
+            scoop.owned_references.insert(label.to_string(), reference);
+            reference
+        };
         self.memory_set(reference, value);
         Ok(reference)
+
     }
 
     pub fn scoop_get(&self, scoop: ScoopID, label: &str) -> Option<&'_ RuntimeValue> {

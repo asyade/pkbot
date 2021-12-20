@@ -94,7 +94,7 @@ impl ProgramRuntime {
 
             if call.0.content.is_closure() {
                 let (target_name, target_scoop) = left.reference();
-                if let Err(e) = context.write().await.scoop_set(target_scoop, target_name.to_string(), RuntimeValue::Procedure(call)) {
+                if let Err(e) = context.write().await.scoop_set(target_scoop, target_name, RuntimeValue::Procedure(call)) {
                     dbg!(e);
                 }
             } else {
@@ -116,7 +116,7 @@ impl ProgramRuntime {
                     RuntimeValue::Undefined
                 };
                 let (target_name, target_scoop) = left.reference();
-                if let Err(e) = context.write().await.scoop_set(target_scoop, target_name.to_string(), value) {
+                if let Err(e) = context.write().await.scoop_set(target_scoop, target_name, value) {
                     dbg!(e);
                 }
             }
@@ -144,7 +144,6 @@ impl ProgramRuntime {
                     }
                 },
                 RuntimeValue::Procedure(node) => {
-                    dbg!(&node);
                     if let Some(right) = node.0.right.as_ref().unwrap().0.left.clone() {
                         drop(lock);
                         let fut = inner_spawn!(reactor => right, stdin, stdout, ctx);

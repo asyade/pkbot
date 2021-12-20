@@ -53,7 +53,7 @@ impl Program {
         let mut root = CommandAstNode::parse(&mut Token::lexer(text.as_ref()), None)?;
         let context = AstContext::new(&mut root, |context| {
             context
-                .scoop_set(1, "ls".to_string(), RuntimeValue::binding(crate::reactor::runtime::ls::wrap()))
+                .scoop_set(1, "ls", RuntimeValue::binding(crate::reactor::runtime::ls::wrap()))
                 .expect("Failed to register buitlin");
         });
         Ok(Program {
