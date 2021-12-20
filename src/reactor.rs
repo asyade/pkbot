@@ -108,7 +108,7 @@ impl Reactor {
     }
 
     pub async fn spawn_program(&self, program: Program) {
-        let runtime = ProgramRuntime::spawn(program.root, self.clone()).await;
+        let runtime = ProgramRuntime::spawn(program, self.clone()).await;
         tokio::spawn(Self::runtime_handler(self.clone(), runtime));
     }
 

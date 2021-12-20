@@ -148,8 +148,8 @@ impl ArgumentTimestamp {
                         crtime,
                         delta: human_duration(raw)?,
                     })
-                },
-                _ => return Err(Error::Parsing(raw.to_string(), 3..0))
+                }
+                _ => return Err(Error::Parsing(raw.to_string(), 3..0)),
             }
         } else {
             Ok(ArgumentTimestamp::Absolute {
@@ -171,7 +171,7 @@ impl ArgumentTimestamp {
             ArgumentTimestamp::Absolute { date } => date.timestamp(),
             ArgumentTimestamp::RelativeToNow { delta, crtime } => {
                 crtime.duration_since(UNIX_EPOCH).unwrap().as_secs() as i64 - delta.as_secs() as i64
-            },
+            }
         }
     }
 }

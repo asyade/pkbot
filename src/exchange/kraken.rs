@@ -68,7 +68,11 @@ impl KrakenExchange {
             };
             map.insert(id, def);
         }
-        log::trace!("Refresh market cache DONE: EXCHANGE={}, NBR_ENTRIES={}", EXCHANGE_NAME, map.len());
+        log::trace!(
+            "Refresh market cache DONE: EXCHANGE={}, NBR_ENTRIES={}",
+            EXCHANGE_NAME,
+            map.len()
+        );
         lock.replace(map.clone());
         Ok(())
     }

@@ -1,11 +1,13 @@
 use crate::prelude::*;
 use logos::Logos;
 
-pub mod ast;
 pub mod aggregator;
+pub mod ast;
 mod lexer;
 use ast::*;
 use lexer::*;
+
+use self::aggregator::AstContext;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ProgramOutput {
@@ -42,15 +44,18 @@ pub enum ProgramStatus {
 #[derive(Debug)]
 pub struct Program {
     pub root: Node,
+    pub context: AstContext,
     pub status: ProgramStatus,
 }
 
 impl Program {
     pub fn new<T: AsRef<str>>(text: T) -> Result<Program> {
-        let root = CommandAstNode::parse(&mut Token::lexer(text.as_ref()), None)?;
+        let mut root = CommandAstNode::parse(&mut Token::lexer(text.as_ref()), None)?;
+        let context = AstContext::new(&mut root);
         Ok(Program {
             root,
             status: ProgramStatus::None,
+            context,
         })
     }
 }

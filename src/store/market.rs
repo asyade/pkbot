@@ -123,10 +123,7 @@ impl StoreMarketHandle {
             .ok()
             .flatten()
         {
-            let (decoded, _) = bincode::decode_from_slice(
-                raw.as_ref(),
-                Configuration::standard(),
-            )?;
+            let (decoded, _) = bincode::decode_from_slice(raw.as_ref(), Configuration::standard())?;
             Ok(decoded)
         } else {
             let settings = MarketSettings::default();
@@ -144,7 +141,7 @@ impl StoreMarketHandle {
 
     pub async fn interval(&self, interval: Interval) -> Result<StoreMarketDataHandle> {
         if let Some(handle) = self.trees_cache.read().await.get(&interval).cloned() {
-            return Ok(handle)
+            return Ok(handle);
         }
         log::trace!(
             "Register sync market data: EXCHANGE={}, BASE={}, QUOTE={}, INTERVAL={}",

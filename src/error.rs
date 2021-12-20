@@ -30,6 +30,8 @@ pub enum Error {
     PairNotLoaded,
     #[error("Parsing error: {0}")]
     Parsing(String, std::ops::Range<usize>),
+    #[error("Reference not found: `{0}`")]
+    ReferenceNotFound(String),
     #[error("{0}")]
     ParseInt(#[from] std::num::ParseIntError),
     #[error("Wrong interval: {0}")]

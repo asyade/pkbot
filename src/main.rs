@@ -28,7 +28,7 @@ async fn main() {
             App::new("ast")
                 .about("Print ast of a command")
                 .arg(Arg::new("command").required(true)),
-            )
+        )
         .subcommand(
             App::new("exec")
                 .about("Execute a command")
@@ -53,6 +53,7 @@ async fn main() {
             let matches = matches.subcommand_matches("ast").unwrap();
             let command = matches.value_of("command").unwrap();
             let program = Program::new(command).expect("Failed to parse command");
+            dbg!(&program.context);
             ptree::print_tree(&&program.root).expect("Unable to print directory tree");
         }
         Some("exec") => {

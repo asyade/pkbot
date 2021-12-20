@@ -46,7 +46,7 @@ impl SyncMarket {
             interval
         );
         if self.check_periode_availability(from, to, interval).await? {
-            return Ok(from..to)
+            return Ok(from..to);
         }
 
         let exchange_lock = self.exchange.lock().await;
@@ -67,7 +67,12 @@ impl SyncMarket {
         Ok(chunk.begin..chunk.end)
     }
 
-    async fn check_periode_availability(&self, from: Timestamp, to: Timestamp, interval: Interval) -> Result<bool> {
+    async fn check_periode_availability(
+        &self,
+        from: Timestamp,
+        to: Timestamp,
+        interval: Interval,
+    ) -> Result<bool> {
         let store = self.store.interval(interval).await?;
         if from != 0 {
             let _close_from = match store.prev_close_to(from)? {
@@ -75,7 +80,11 @@ impl SyncMarket {
                 Some(close_from) if close_from - from > interval.as_secs() => return Ok(false),
                 Some(close_from) => close_from,
             };
-        } else if store.first_ohlc()?.map(|e| e.first_available).unwrap_or(true) {
+        } else if store
+            .first_ohlc()?
+            .map(|e| e.first_available)
+            .unwrap_or(true)
+        {
             return Ok(false);
         }
         let _close_to = match store.next_close_to(to)? {

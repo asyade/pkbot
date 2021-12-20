@@ -1,58 +1,24 @@
 mod builtin;
 use super::*;
-use crate::interpretor::ast::*;
+use crate::interpretor::{aggregator::AstContext, ast::*};
 pub use builtin::*;
 
 const CHANN_SIZE_PIPLINE: usize = 512;
 const CHANN_SIZE_MAIN: usize = 2048;
 
-pub struct Scope {
-    kind: ScopeKind,
-    parent: Option<Box<Scope>>,
-    stack: HashMap<String, RuntimeValue>,
-}
-
-pub type SyncScope = Arc<RwLock<Scope>>;
-
-impl Scope {
-    pub fn new(kind: ScopeKind) -> Self {
-        Self {
-            kind,
-            stack: HashMap::new(),
-            parent: None,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub enum ScopeKind {
-    Global,
-    Block,
-    Closure,
-}
-
-pub enum RuntimeValue {
-    Number(f64),
-    String(String),
-    Object(HashMap<String, RuntimeValue>),
-    Array(Vec<RuntimeValue>),
-    Closure(Node),
-}
-
 pub struct ProgramRuntime {
     pub id: ProgramIdentifier,
     pub stdout: Option<Receiver<ProgramOutput>>,
-    pub global: Scope,
 }
 
 macro_rules! inner_spawn {
-    ($reactor:expr => $node:expr, $stdin:expr, $stdout:expr, $scope:expr) => {
+    ($reactor:expr => $node:expr, $stdin:expr, $stdout:expr) => {
         match $node.0.content {
-            CommandAstBody::Call { .. } => ProgramRuntime::call($reactor, $node, $stdin, $stdout, $scope),
+            CommandAstBody::Call { .. } => ProgramRuntime::call($reactor, $node, $stdin, $stdout),
             // CommandAstBody::Assignation { .. } => unimplemented!(),
             //CommandAstBody::Literal { .. } => unimplemented!(),
             //CommandAstBody::Pipe if $node.0.left.is_some() && $node.0.right.is_some() => {
-                //    ProgramRuntime::pipe(
+            //    ProgramRuntime::pipe(
             //        $node.0.left.unwrap(),
             //        $node.0.right.unwrap(),
             //        $reactor,
@@ -61,29 +27,27 @@ macro_rules! inner_spawn {
             //    )
             //}
             //CommandAstBody::Comma => {
-                //    ProgramRuntime::separator($node.0.left, $node.0.right, $reactor, $stdin, $stdout)
-                //}
-                //CommandAstBody::Pipe => {
-                    //    panic!("Invalide pipe");
-                    //}
-                    //CommandAstBody::Arguments { .. } => {
-                        //    panic!("Expected call or pipe, found arguments");
-                        //}
+            //    ProgramRuntime::separator($node.0.left, $node.0.right, $reactor, $stdin, $stdout)
+            //}
+            //CommandAstBody::Pipe => {
+            //    panic!("Invalide pipe");
+            //}
+            //CommandAstBody::Arguments { .. } => {
+            //    panic!("Expected call or pipe, found arguments");
+            //}
             _ => unimplemented!(),
         }
     };
 }
 
 impl ProgramRuntime {
-    pub async fn spawn(root: Node, reactor: Reactor) -> ProgramRuntime {
+    pub async fn spawn(mut program: Program, reactor: Reactor) -> ProgramRuntime {
         let (main_sender, main_receiver) = channel(CHANN_SIZE_MAIN);
         let id = reactor.process_counter.fetch_add(1, Ordering::SeqCst);
-        let global_scope = Scope::new(ScopeKind::Global);
-        Self::inner_spawn(root, reactor, None, main_sender, &global_scope).await;
+        Self::inner_spawn(program.root, reactor, None, main_sender).await;
         ProgramRuntime {
             id,
             stdout: Some(main_receiver),
-            global: global_scope,
         }
     }
 
@@ -92,9 +56,8 @@ impl ProgramRuntime {
         reactor: Reactor,
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
-        scope: &Scope,
     ) -> JoinHandle<()> {
-        inner_spawn!(reactor => root, stdin, stdout, &scope)
+        inner_spawn!(reactor => root, stdin, stdout)
     }
 
     fn call(
@@ -102,7 +65,6 @@ impl ProgramRuntime {
         root: Node,
         stdin: Option<Receiver<ProgramOutput>>,
         stdout: Sender<ProgramOutput>,
-        scope: &Scope,
     ) -> JoinHandle<()> {
         unimplemented!()
         //let program_name = root.call_name();
@@ -113,7 +75,7 @@ impl ProgramRuntime {
         //    .0
         //    .content
         //    .arguments();
-//
+        //
         //match program_name.as_str() {
         //    "ls" => tokio::spawn(try_builtin(
         //        ls::main(reactor.clone(), arguments, stdin, stdout.clone()),
@@ -156,9 +118,9 @@ impl ProgramRuntime {
         stdout: Sender<ProgramOutput>,
     ) -> JoinHandle<()> {
         // tokio::spawn((async move || {
-            // let (pipline_sender, pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
-            // let _left = inner_spawn!(reactor.clone() => left, stdin, pipline_sender);
-            // let _ = inner_spawn!(reactor.clone() => right, Some(pipline_receiver), stdout.clone());
+        // let (pipline_sender, pipline_receiver) = channel(CHANN_SIZE_PIPLINE);
+        // let _left = inner_spawn!(reactor.clone() => left, stdin, pipline_sender);
+        // let _ = inner_spawn!(reactor.clone() => right, Some(pipline_receiver), stdout.clone());
         // })())
         unimplemented!()
     }
@@ -171,12 +133,12 @@ impl ProgramRuntime {
         stdout: Sender<ProgramOutput>,
     ) -> JoinHandle<()> {
         // tokio::spawn((async move || {
-            // if let Some(left) = left {
-                // let _ = tokio::join!(inner_spawn!(reactor.clone() => left, stdin, stdout.clone()));
-            // }
-            // if let Some(right) = right {
-                // let _ = tokio::join!(inner_spawn!(reactor => right, None, stdout.clone()));
-            // }
+        // if let Some(left) = left {
+        // let _ = tokio::join!(inner_spawn!(reactor.clone() => left, stdin, stdout.clone()));
+        // }
+        // if let Some(right) = right {
+        // let _ = tokio::join!(inner_spawn!(reactor => right, None, stdout.clone()));
+        // }
         // })())
         unimplemented!()
     }
